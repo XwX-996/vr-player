@@ -1,0 +1,6 @@
+Pods/
+*.xcuserstate
+DerivedData/
+.derived-data/
+build/
+*.xcresult

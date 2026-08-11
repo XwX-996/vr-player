@@ -1,0 +1,3 @@
+googlevr/cardboard v1.34.0
+commit 4775db6e0a92fdc8bd102a818d741f2bde372876
+Protobuf-C++ 3.18.0 is resolved by CocoaPods in Podfile.lock.

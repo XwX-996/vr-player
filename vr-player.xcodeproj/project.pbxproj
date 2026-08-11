@@ -6,8 +6,36 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		06B8957FCC24B498EFB16140 /* ByteRangeIndexTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD449F797502458B02D71871 /* ByteRangeIndexTests.swift */; };
+		3B8756D030DE8EB2A0F17BE5 /* VRMappingAndInteractionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9038B16465DB6998993C5289 /* VRMappingAndInteractionTests.swift */; };
+		4BEB275C3A2714FDA32AC60F /* BookmarkAccessTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AAA4AE213C1C3DC4BE2077E /* BookmarkAccessTests.swift */; };
+		5B4F6B64E45F79CE3393072A /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 71A4BA558FFEE9A88F40BAC2 /* Foundation.framework */; };
+		65A202B326DCF3606B557ED2 /* libPods-vr-player.a in Frameworks */ = {isa = PBXBuildFile; fileRef = EEA78C99E7918810DD8266C7 /* libPods-vr-player.a */; };
+		B86C5C44F8AC546F571B9E7F /* PlaybackStateReducerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DCB957C37997F2D2D3B4962 /* PlaybackStateReducerTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B90EBF403335B70E9FEE79F8 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = DC2C3E553029782B00AFF7EB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = DC2C3E5C3029782B00AFF7EB;
+			remoteInfo = "vr-player";
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		1D9C069B87E0A2956F132458 /* Pods-vr-player.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-vr-player.debug.xcconfig"; path = "Target Support Files/Pods-vr-player/Pods-vr-player.debug.xcconfig"; sourceTree = "<group>"; };
+		2AAA4AE213C1C3DC4BE2077E /* BookmarkAccessTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BookmarkAccessTests.swift; sourceTree = "<group>"; };
+		4DCB957C37997F2D2D3B4962 /* PlaybackStateReducerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = PlaybackStateReducerTests.swift; sourceTree = "<group>"; };
+		71A4BA558FFEE9A88F40BAC2 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
+		7EFBBE6BCC1659F5F5005429 /* Pods-vr-player.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-vr-player.release.xcconfig"; path = "Target Support Files/Pods-vr-player/Pods-vr-player.release.xcconfig"; sourceTree = "<group>"; };
+		9038B16465DB6998993C5289 /* VRMappingAndInteractionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VRMappingAndInteractionTests.swift; sourceTree = "<group>"; };
+		CD449F797502458B02D71871 /* ByteRangeIndexTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ByteRangeIndexTests.swift; sourceTree = "<group>"; };
 		DC2C3E5D3029782B00AFF7EB /* vr-player.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "vr-player.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		EEA78C99E7918810DD8266C7 /* libPods-vr-player.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-vr-player.a"; sourceTree = BUILT_PRODUCTS_DIR; };
+		F59F18B31D43DE8D16BF5EAC /* vr-playerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "vr-playerTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -19,21 +47,70 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		2C910651FF3CE849017D9716 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5B4F6B64E45F79CE3393072A /* Foundation.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DC2C3E5A3029782B00AFF7EB /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				65A202B326DCF3606B557ED2 /* libPods-vr-player.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		24E914616907AF27467B42BB /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				EEA78C99E7918810DD8266C7 /* libPods-vr-player.a */,
+				B900DFE53E92DDD4D54E1855 /* iOS */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		8F110D7220F6B0E7A2970020 /* vr-playerTests */ = {
+			isa = PBXGroup;
+			children = (
+				2AAA4AE213C1C3DC4BE2077E /* BookmarkAccessTests.swift */,
+				CD449F797502458B02D71871 /* ByteRangeIndexTests.swift */,
+				4DCB957C37997F2D2D3B4962 /* PlaybackStateReducerTests.swift */,
+				9038B16465DB6998993C5289 /* VRMappingAndInteractionTests.swift */,
+			);
+			path = "vr-playerTests";
+			sourceTree = "<group>";
+		};
+		B900DFE53E92DDD4D54E1855 /* iOS */ = {
+			isa = PBXGroup;
+			children = (
+				71A4BA558FFEE9A88F40BAC2 /* Foundation.framework */,
+			);
+			name = iOS;
+			sourceTree = "<group>";
+		};
+		CF29B374F226C9C353E6AA7F /* Pods */ = {
+			isa = PBXGroup;
+			children = (
+				1D9C069B87E0A2956F132458 /* Pods-vr-player.debug.xcconfig */,
+				7EFBBE6BCC1659F5F5005429 /* Pods-vr-player.release.xcconfig */,
+			);
+			path = Pods;
+			sourceTree = "<group>";
+		};
 		DC2C3E543029782B00AFF7EB = {
 			isa = PBXGroup;
 			children = (
 				DC2C3E5F3029782B00AFF7EB /* vr-player */,
 				DC2C3E5E3029782B00AFF7EB /* Products */,
+				CF29B374F226C9C353E6AA7F /* Pods */,
+				24E914616907AF27467B42BB /* Frameworks */,
+				8F110D7220F6B0E7A2970020 /* vr-playerTests */,
 			);
 			sourceTree = "<group>";
 		};
@@ -41,6 +118,7 @@
 			isa = PBXGroup;
 			children = (
 				DC2C3E5D3029782B00AFF7EB /* vr-player.app */,
+				F59F18B31D43DE8D16BF5EAC /* vr-playerTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -48,10 +126,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		61D074660314A5BEDAEF8745 /* vr-playerTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D8B91B325304DD2212B33E02 /* Build configuration list for PBXNativeTarget "vr-playerTests" */;
+			buildPhases = (
+				6435ADE1A7CEC7DC69FAB54F /* Sources */,
+				2C910651FF3CE849017D9716 /* Frameworks */,
+				ACA44D60A252E9A1B8A0CD63 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				92C32E418CB6438A8BBC7EA2 /* PBXTargetDependency */,
+			);
+			name = "vr-playerTests";
+			productName = "vr-playerTests";
+			productReference = F59F18B31D43DE8D16BF5EAC /* vr-playerTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		DC2C3E5C3029782B00AFF7EB /* vr-player */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = DC2C3E683029782D00AFF7EB /* Build configuration list for PBXNativeTarget "vr-player" */;
 			buildPhases = (
+				56F98ABF7A2D3FF3739E699E /* [CP] Check Pods Manifest.lock */,
 				DC2C3E593029782B00AFF7EB /* Sources */,
 				DC2C3E5A3029782B00AFF7EB /* Frameworks */,
 				DC2C3E5B3029782B00AFF7EB /* Resources */,
@@ -64,8 +161,6 @@
 				DC2C3E5F3029782B00AFF7EB /* vr-player */,
 			);
 			name = "vr-player";
-			packageProductDependencies = (
-			);
 			productName = "vr-player";
 			productReference = DC2C3E5D3029782B00AFF7EB /* vr-player.app */;
 			productType = "com.apple.product-type.application";
@@ -100,11 +195,19 @@
 			projectRoot = "";
 			targets = (
 				DC2C3E5C3029782B00AFF7EB /* vr-player */,
+				61D074660314A5BEDAEF8745 /* vr-playerTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		ACA44D60A252E9A1B8A0CD63 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DC2C3E5B3029782B00AFF7EB /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -114,7 +217,43 @@
 		};
 /* End PBXResourcesBuildPhase section */
 
+/* Begin PBXShellScriptBuildPhase section */
+		56F98ABF7A2D3FF3739E699E /* [CP] Check Pods Manifest.lock */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"${PODS_PODFILE_DIR_PATH}/Podfile.lock",
+				"${PODS_ROOT}/Manifest.lock",
+			);
+			name = "[CP] Check Pods Manifest.lock";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(DERIVED_FILE_DIR)/Pods-vr-player-checkManifestLockResult.txt",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "diff \"${PODS_PODFILE_DIR_PATH}/Podfile.lock\" \"${PODS_ROOT}/Manifest.lock\" > /dev/null\nif [ $? != 0 ] ; then\n    # print error to STDERR\n    echo \"error: The sandbox is not in sync with the Podfile.lock. Run 'pod install' or update your CocoaPods installation.\" >&2\n    exit 1\nfi\n# This output is used by Xcode 'outputs' to avoid re-running this script phase.\necho \"SUCCESS\" > \"${SCRIPT_OUTPUT_FILE_0}\"\n";
+			showEnvVarsInLog = 0;
+		};
+/* End PBXShellScriptBuildPhase section */
+
 /* Begin PBXSourcesBuildPhase section */
+		6435ADE1A7CEC7DC69FAB54F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				4BEB275C3A2714FDA32AC60F /* BookmarkAccessTests.swift in Sources */,
+				06B8957FCC24B498EFB16140 /* ByteRangeIndexTests.swift in Sources */,
+				B86C5C44F8AC546F571B9E7F /* PlaybackStateReducerTests.swift in Sources */,
+				3B8756D030DE8EB2A0F17BE5 /* VRMappingAndInteractionTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		DC2C3E593029782B00AFF7EB /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -124,7 +263,63 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		92C32E418CB6438A8BBC7EA2 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			name = "vr-player";
+			target = DC2C3E5C3029782B00AFF7EB /* vr-player */;
+			targetProxy = B90EBF403335B70E9FEE79F8 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		122380B251D35E4ACCB3AA79 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 5L2K6X9S44;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "cxc.vr-playerTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/vr-player.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/vr-player";
+			};
+			name = Debug;
+		};
+		971C8E655C76CD9C7914713E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CLANG_ENABLE_OBJC_WEAK = NO;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 5L2K6X9S44;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "cxc.vr-playerTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/vr-player.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/vr-player";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		DC2C3E663029782D00AFF7EB /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -248,17 +443,25 @@
 		};
 		DC2C3E693029782D00AFF7EB /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 1D9C069B87E0A2956F132458 /* Pods-vr-player.debug.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5L2K6X9S44;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/vr-player/ThirdParty/Cardboard/sdk",
+					"$(SRCROOT)/vr-player/ThirdParty/Cardboard/proto",
+				);
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_NSMotionUsageDescription = "VR Player uses motion sensors to follow your head direction in headset mode.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -266,31 +469,44 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "cxc.vr-player";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "vr-player/VRPlayer-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
 		DC2C3E6A3029782D00AFF7EB /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = 7EFBBE6BCC1659F5F5005429 /* Pods-vr-player.release.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CLANG_CXX_LANGUAGE_STANDARD = "c++17";
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 5L2K6X9S44;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/vr-player/ThirdParty/Cardboard/sdk",
+					"$(SRCROOT)/vr-player/ThirdParty/Cardboard/proto",
+				);
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_NSMotionUsageDescription = "VR Player uses motion sensors to follow your head direction in headset mode.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -298,21 +514,35 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-ObjC",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "cxc.vr-player";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = "vr-player/VRPlayer-Bridging-Header.h";
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		D8B91B325304DD2212B33E02 /* Build configuration list for PBXNativeTarget "vr-playerTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				971C8E655C76CD9C7914713E /* Release */,
+				122380B251D35E4ACCB3AA79 /* Debug */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		DC2C3E583029782B00AFF7EB /* Build configuration list for PBXProject "vr-player" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
