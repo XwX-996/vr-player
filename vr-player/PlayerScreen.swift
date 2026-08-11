@@ -17,8 +17,11 @@ struct PlayerScreen: View {
     @State private var playlistPage = 0
     @State private var volumeController = SystemVolumeController()
     @State private var brightnessController = ScreenBrightnessController()
+    @State private var recenterRequestID: UUID?
+    @State private var recenterCountdown: Int?
 
     private let playlistPageSize = 5
+    private let recenterCountdownStart = 3
 
     init(item: PlaylistItem, playlist: [PlaylistItem]) {
         self.playlist = playlist
@@ -50,6 +53,7 @@ struct PlayerScreen: View {
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
                 .onTapGesture {
+                    guard recenterCountdown == nil else { return }
                     renderer?.showControls()
                 }
 
@@ -82,6 +86,29 @@ struct PlayerScreen: View {
             UIApplication.shared.isIdleTimerDisabled = true
             open(currentItem)
         }
+        .task(id: recenterRequestID) {
+            guard recenterRequestID != nil else {
+                recenterCountdown = nil
+                return
+            }
+
+            for value in stride(from: recenterCountdownStart, through: 1, by: -1) {
+                guard !Task.isCancelled else { return }
+                recenterCountdown = value
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                } catch {
+                    return
+                }
+            }
+
+            guard !Task.isCancelled, scenePhase == .active else {
+                recenterCountdown = nil
+                return
+            }
+            recenterCountdown = nil
+            renderer?.recenter()
+        }
         .onDisappear {
             session?.shutdown()
             renderer?.pauseTracking()
@@ -93,6 +120,7 @@ struct PlayerScreen: View {
             if newPhase == .active {
                 renderer?.resumeTracking()
             } else {
+                recenterRequestID = nil
                 renderer?.pauseTracking()
                 session?.persistState()
                 try? modelContext.save()
@@ -120,17 +148,22 @@ struct PlayerScreen: View {
             volume: volumeController.volume,
             playlistEntries: entries,
             playlistPage: safePage,
-            playlistPageCount: pageCount
+            playlistPageCount: pageCount,
+            recenterCountdown: recenterCountdown
         )
     }
 
     private func handle(_ activation: VRControlActivation) {
         guard let session else { return }
         switch activation.target {
-        case .close:
+        case .back:
             closePlayer()
+        case .hideControls:
+            renderer?.hideControls()
         case .recenter:
-            renderer?.recenter()
+            renderer?.hideControls()
+            recenterCountdown = recenterCountdownStart
+            recenterRequestID = UUID()
         case .previous:
             switchRelative(by: -1)
         case .playPause:

@@ -102,6 +102,30 @@ final class VRMappingAndInteractionTests: XCTestCase {
         XCTAssertEqual(VRHUDLayout.hitTest(state: state, point: SIMD2(0.75, 0.61))?.target, .sideBySide)
     }
 
+    func testNavigationControlHitTargets() {
+        var state = sampleHUDState()
+
+        XCTAssertEqual(VRHUDLayout.hitTest(state: state, point: SIMD2(0.10, 0.05))?.target, .back)
+        XCTAssertEqual(VRHUDLayout.hitTest(state: state, point: SIMD2(0.80, 0.05))?.target, .recenter)
+        XCTAssertEqual(VRHUDLayout.hitTest(state: state, point: SIMD2(0.90, 0.05))?.target, .hideControls)
+
+        state.mode = .playlist
+        XCTAssertEqual(VRHUDLayout.hitTest(state: state, point: SIMD2(0.08, 0.10))?.target, .playlistBack)
+        XCTAssertEqual(VRHUDLayout.hitTest(state: state, point: SIMD2(0.90, 0.05))?.target, .hideControls)
+    }
+
+    func testHeadGestureResetClearsAccumulatedTransitions() {
+        var detector = HeadGestureDetector()
+
+        XCTAssertFalse(detector.observe(pitch: 0.3, at: 0))
+        XCTAssertFalse(detector.observe(pitch: -0.3, at: 0.5))
+        XCTAssertFalse(detector.observe(pitch: 0.3, at: 1))
+
+        detector.reset()
+
+        XCTAssertFalse(detector.observe(pitch: -0.3, at: 1.5))
+    }
+
     private func sampleHUDState() -> VRHUDState {
         VRHUDState(
             mode: .main,

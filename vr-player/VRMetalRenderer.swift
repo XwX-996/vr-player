@@ -299,6 +299,7 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         let currentHUDTexture = hudTexture
         let currentActionHandler = actionHandler
         stateLock.unlock()
+        let isRecenterCountdownVisible = currentHUDState?.recenterCountdown != nil
 
         if let newFrame = currentFrameProvider?.copyFrame(
             forPresentationHostTime: presentationTime
@@ -318,9 +319,15 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         )
 
         applyVisibilityRequest(headView: headView)
-        let pitch = Self.pitch(fromHeadView: headView)
-        if gestureDetector.observe(pitch: pitch, at: renderTime) {
-            showControls(at: headView)
+        if isRecenterCountdownVisible {
+            controlsVisible = false
+            dwellTracker.reset()
+            gestureDetector.reset()
+        } else {
+            let pitch = Self.pitch(fromHeadView: headView)
+            if gestureDetector.observe(pitch: pitch, at: renderTime) {
+                showControls(at: headView)
+            }
         }
 
         let currentGazeHit: VRControlHit?
@@ -355,20 +362,30 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
                 headView: headView
             )
         }
-        if controlsVisible, let currentHUDTexture {
+        if (controlsVisible || isRecenterCountdownVisible), let currentHUDTexture {
+            let modelMatrix = isRecenterCountdownVisible
+                ? simd_inverse(headView) * simd_float4x4.translation(
+                    x: 0,
+                    y: 0,
+                    z: -VRHUDGeometry.panelDistance
+                )
+                : panelModelMatrix
             drawHUD(
                 encoder: eyeEncoder,
                 eyeTexture: eyeTexture,
                 texture: currentHUDTexture,
-                headView: headView
+                headView: headView,
+                modelMatrix: modelMatrix
             )
         }
-        drawReticle(
-            encoder: eyeEncoder,
-            eyeTexture: eyeTexture,
-            active: controlsVisible && dwellTracker.target != nil,
-            progress: dwellTracker.progress
-        )
+        if !isRecenterCountdownVisible {
+            drawReticle(
+                encoder: eyeEncoder,
+                eyeTexture: eyeTexture,
+                active: controlsVisible && dwellTracker.target != nil,
+                progress: dwellTracker.progress
+            )
+        }
         eyeEncoder.endEncoding()
 
         guard let displayPass = view.currentRenderPassDescriptor,
@@ -437,7 +454,8 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         encoder: MTLRenderCommandEncoder,
         eyeTexture: MTLTexture,
         texture: MTLTexture,
-        headView: simd_float4x4
+        headView: simd_float4x4,
+        modelMatrix: simd_float4x4
     ) {
         encoder.setRenderPipelineState(hudPipeline)
         encoder.setVertexBuffer(hudVertices, offset: 0, index: 0)
@@ -448,7 +466,7 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         for eye in 0..<2 {
             setViewport(encoder: encoder, eye: eye, eyeWidth: eyeWidth, height: height)
             var uniforms = HUDUniforms(
-                modelViewProjection: eyeViewProjection(eye: eye, headView: headView, fallbackAspect: Float(eyeWidth / height)) * panelModelMatrix
+                modelViewProjection: eyeViewProjection(eye: eye, headView: headView, fallbackAspect: Float(eyeWidth / height)) * modelMatrix
             )
             encoder.setVertexBytes(&uniforms, length: MemoryLayout<HUDUniforms>.stride, index: 1)
             encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
@@ -541,6 +559,7 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         } else {
             controlsVisible = false
             dwellTracker.reset()
+            gestureDetector.reset()
         }
     }
 

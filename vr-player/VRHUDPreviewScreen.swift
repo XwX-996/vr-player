@@ -26,7 +26,8 @@ struct VRHUDPreviewScreen: View {
                 volume: 0.72,
                 playlistEntries: [],
                 playlistPage: 0,
-                playlistPageCount: 1
+                playlistPageCount: 1,
+                recenterCountdown: ProcessInfo.processInfo.arguments.contains("--recenter-countdown-preview") ? 3 : nil
             ),
             actionHandler: { _ in }
         ) { renderer in

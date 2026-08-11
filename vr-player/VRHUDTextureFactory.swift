@@ -10,6 +10,11 @@ enum VRHUDTextureFactory {
         format.scale = 1
         return UIGraphicsImageRenderer(size: pixelSize, format: format).image { context in
             let graphics = context.cgContext
+            if let countdown = state.recenterCountdown {
+                drawRecenterCountdown(countdown, in: graphics)
+                return
+            }
+
             graphics.setFillColor(UIColor.black.withAlphaComponent(0.72).cgColor)
             graphics.addPath(UIBezierPath(roundedRect: CGRect(origin: .zero, size: pixelSize), cornerRadius: 8).cgPath)
             graphics.fillPath()
@@ -23,9 +28,32 @@ enum VRHUDTextureFactory {
         }.cgImage
     }
 
+    private static func drawRecenterCountdown(_ value: Int, in context: CGContext) {
+        let circle = CGRect(x: 470, y: 190, width: 260, height: 260)
+        context.setFillColor(UIColor.black.withAlphaComponent(0.78).cgColor)
+        context.fillEllipse(in: circle)
+        context.setStrokeColor(UIColor.white.withAlphaComponent(0.42).cgColor)
+        context.setLineWidth(5)
+        context.strokeEllipse(in: circle.insetBy(dx: 3, dy: 3))
+
+        drawSymbol(
+            "scope",
+            rect: CGRect(x: circle.midX - 33, y: circle.minY + 30, width: 66, height: 66),
+            pointSize: 52
+        )
+        drawText(
+            String(value),
+            rect: CGRect(x: circle.minX, y: circle.minY + 102, width: circle.width, height: 125),
+            font: .monospacedDigitSystemFont(ofSize: 100, weight: .semibold),
+            color: .white,
+            alignment: .center
+        )
+    }
+
     private static func drawMain(state: VRHUDState, in context: CGContext) {
-        drawIcon("xmark", in: VRHUDLayout.close, context: context, label: "Close")
+        drawIcon("chevron.left", in: VRHUDLayout.back, context: context, label: "Back")
         drawIcon("scope", in: VRHUDLayout.recenter, context: context, label: "Center")
+        drawIcon("xmark", in: VRHUDLayout.hideControls, context: context, label: "Close")
         drawIcon("backward.end.fill", in: VRHUDLayout.previous, context: context, label: "Previous")
         drawIcon(state.isPlaying ? "pause.fill" : "play.fill", in: VRHUDLayout.playPause, context: context, label: state.isPlaying ? "Pause" : "Play")
         drawIcon("forward.end.fill", in: VRHUDLayout.next, context: context, label: "Next")
@@ -69,6 +97,7 @@ enum VRHUDTextureFactory {
 
     private static func drawPlaylist(state: VRHUDState, in context: CGContext) {
         drawIcon("chevron.left", in: VRHUDLayout.playlistBack, context: context, label: "Back")
+        drawIcon("xmark", in: VRHUDLayout.hideControls, context: context, label: "Close")
         drawText(
             "Playlist",
             rect: CGRect(x: 200, y: 42, width: 800, height: 64),

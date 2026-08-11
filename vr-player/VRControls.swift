@@ -24,10 +24,12 @@ nonisolated struct VRHUDState: Equatable, Sendable {
     var playlistEntries: [VRPlaylistEntry]
     var playlistPage: Int
     var playlistPageCount: Int
+    var recenterCountdown: Int? = nil
 }
 
 nonisolated enum VRControlTarget: Hashable, Sendable {
-    case close
+    case back
+    case hideControls
     case recenter
     case previous
     case playPause
@@ -72,8 +74,9 @@ nonisolated struct VRNormalizedRect: Equatable, Sendable {
 }
 
 nonisolated enum VRHUDLayout {
-    static let close = VRNormalizedRect(minX: 0.08, minY: 0.005, maxX: 0.16, maxY: 0.105)
-    static let recenter = VRNormalizedRect(minX: 0.84, minY: 0.005, maxX: 0.92, maxY: 0.105)
+    static let back = VRNormalizedRect(minX: 0.06, minY: 0.005, maxX: 0.14, maxY: 0.105)
+    static let recenter = VRNormalizedRect(minX: 0.76, minY: 0.005, maxX: 0.84, maxY: 0.105)
+    static let hideControls = VRNormalizedRect(minX: 0.86, minY: 0.005, maxX: 0.94, maxY: 0.105)
     static let previous = VRNormalizedRect(minX: 0.10, minY: 0.11, maxX: 0.26, maxY: 0.31)
     static let playPause = VRNormalizedRect(minX: 0.30, minY: 0.11, maxX: 0.46, maxY: 0.31)
     static let next = VRNormalizedRect(minX: 0.50, minY: 0.11, maxX: 0.66, maxY: 0.31)
@@ -93,8 +96,9 @@ nonisolated enum VRHUDLayout {
         guard point.x >= 0, point.x <= 1, point.y >= 0, point.y <= 1 else { return nil }
         switch state.mode {
         case .main:
-            if close.contains(point) { return VRControlHit(target: .close, value: nil) }
+            if back.contains(point) { return VRControlHit(target: .back, value: nil) }
             if recenter.contains(point) { return VRControlHit(target: .recenter, value: nil) }
+            if hideControls.contains(point) { return VRControlHit(target: .hideControls, value: nil) }
             if previous.contains(point) { return VRControlHit(target: .previous, value: nil) }
             if playPause.contains(point) { return VRControlHit(target: .playPause, value: nil) }
             if next.contains(point) { return VRControlHit(target: .next, value: nil) }
@@ -113,6 +117,7 @@ nonisolated enum VRHUDLayout {
                 return VRControlHit(target: .volume, value: volume.horizontalFraction(for: point))
             }
         case .playlist:
+            if hideControls.contains(point) { return VRControlHit(target: .hideControls, value: nil) }
             if playlistBack.contains(point) { return VRControlHit(target: .playlistBack, value: nil) }
             for (index, entry) in state.playlistEntries.enumerated() {
                 if playlistRow(index: index).contains(point) {
@@ -196,5 +201,11 @@ nonisolated struct HeadGestureDetector: Sendable {
         transitions.removeAll(keepingCapacity: true)
         lastTriggeredAt = time
         return true
+    }
+
+    mutating func reset() {
+        armedDirection = 0
+        transitions.removeAll(keepingCapacity: true)
+        lastTriggeredAt = -.infinity
     }
 }
