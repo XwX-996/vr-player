@@ -4,9 +4,83 @@ import QuartzCore
 import UIKit
 import simd
 
-struct VRRenderSettings: Equatable, Sendable {
+nonisolated struct VRRenderSettings: Equatable, Sendable {
     var projection: VRProjection
     var stereoLayout: StereoLayout
+    var presentationMode: VRPresentationMode
+    var threeDMode: VRThreeDMode
+    var vrGlassesEnabled: Bool
+    var displayMode: VRDisplayMode
+    var distortionStrength: Int
+    var edgeCorrection: Int
+    var pupilDistance: Int
+    var eyeDistance: Int
+    var eyeAspect: Int
+    var eyeScale: Int
+    var brightness: Int
+    var contrast: Int
+    var saturation: Int
+
+    init(preferences: VRPlayerPreferences) {
+        projection = preferences.projection
+        stereoLayout = preferences.stereoLayout
+        presentationMode = preferences.presentationMode
+        threeDMode = preferences.threeDMode
+        vrGlassesEnabled = preferences.vrGlassesEnabled
+        displayMode = preferences.displayMode
+        distortionStrength = preferences.distortionStrength
+        edgeCorrection = preferences.edgeCorrection
+        pupilDistance = preferences.pupilDistance
+        eyeDistance = preferences.eyeDistance
+        eyeAspect = preferences.eyeAspect
+        eyeScale = preferences.eyeScale
+        brightness = preferences.brightness
+        contrast = preferences.contrast
+        saturation = preferences.saturation
+    }
+
+    var preferences: VRPlayerPreferences {
+        VRPlayerPreferences(
+            projection: projection,
+            stereoLayout: stereoLayout,
+            presentationMode: presentationMode,
+            threeDMode: threeDMode,
+            vrGlassesEnabled: vrGlassesEnabled,
+            displayMode: displayMode,
+            distortionStrength: distortionStrength,
+            edgeCorrection: edgeCorrection,
+            pupilDistance: pupilDistance,
+            eyeDistance: eyeDistance,
+            eyeAspect: eyeAspect,
+            eyeScale: eyeScale,
+            brightness: brightness,
+            contrast: contrast,
+            saturation: saturation,
+            repeatsCurrentItem: false,
+            playbackRate: 1
+        )
+    }
+
+    var usesDualEyeViewports: Bool {
+        switch presentationMode {
+        case .flat:
+            false
+        case .panorama:
+            vrGlassesEnabled
+        case .threeD:
+            true
+        }
+    }
+
+    var effectiveStereoLayout: StereoLayout {
+        presentationMode == .panorama ? stereoLayout : .mono
+    }
+
+    var renderPreferences: VRPlayerPreferences {
+        var value = preferences
+        value.vrGlassesEnabled = usesDualEyeViewports
+        return value
+    }
 }
 
 private struct SphereVertex {
@@ -18,6 +92,19 @@ private struct SphereUniforms {
     var modelViewProjection: simd_float4x4
     var eyeIndex: UInt32
     var stereoLayout: UInt32
+}
+
+private struct FlatVideoUniforms {
+    var positionScale: SIMD2<Float>
+    var uvOrigin: SIMD2<Float>
+    var uvSize: SIMD2<Float>
+}
+
+private struct ColorUniforms {
+    var brightness: Float
+    var contrast: Float
+    var saturation: Float
+    var padding: Float = 0
 }
 
 private struct HUDVertex {
@@ -64,10 +151,66 @@ private final class VideoTextureResources: @unchecked Sendable {
     }
 }
 
-private enum VRHUDGeometry {
-    static let panelWidth: Float = 3
-    static let panelHeight: Float = panelWidth / 1.875
-    static let panelDistance: Float = 1.55
+nonisolated enum VRHUDGeometry {
+    static let referencePanelWidth: Float = 3
+    static let panelHeight: Float = referencePanelWidth / 1.875
+    static let panelDistance: Float = 1.75
+    static let horizontalSegmentCount = 64
+    static let horizontalRadians = 2 * atan(referencePanelWidth / (2 * panelDistance))
+
+    private static let intersectionEpsilon: Float = 0.0001
+
+    static func surfacePoint(textureCoordinate: SIMD2<Float>) -> SIMD3<Float> {
+        let angle = (textureCoordinate.x - 0.5) * horizontalRadians
+        return SIMD3(
+            panelDistance * sin(angle),
+            (0.5 - textureCoordinate.y) * panelHeight,
+            panelDistance * (1 - cos(angle))
+        )
+    }
+
+    static func textureCoordinate(
+        rayOrigin: SIMD3<Float>,
+        rayDirection: SIMD3<Float>
+    ) -> SIMD2<Float>? {
+        let centeredOriginZ = rayOrigin.z - panelDistance
+        let a = rayDirection.x * rayDirection.x + rayDirection.z * rayDirection.z
+        guard a > intersectionEpsilon else { return nil }
+
+        let b = 2 * (
+            rayOrigin.x * rayDirection.x
+                + centeredOriginZ * rayDirection.z
+        )
+        let c = rayOrigin.x * rayOrigin.x
+            + centeredOriginZ * centeredOriginZ
+            - panelDistance * panelDistance
+        let discriminant = b * b - 4 * a * c
+        guard discriminant >= 0 else { return nil }
+
+        let squareRoot = sqrt(discriminant)
+        let denominator = 2 * a
+        let distances = [
+            (-b - squareRoot) / denominator,
+            (-b + squareRoot) / denominator,
+        ].sorted()
+
+        for distance in distances where distance > intersectionEpsilon {
+            let point = rayOrigin + rayDirection * distance
+            let angle = atan2(point.x, panelDistance - point.z)
+            let u = angle / horizontalRadians + 0.5
+            let v = 0.5 - point.y / panelHeight
+            guard u >= -intersectionEpsilon,
+                  u <= 1 + intersectionEpsilon,
+                  v >= -intersectionEpsilon,
+                  v <= 1 + intersectionEpsilon
+            else { continue }
+            return SIMD2(
+                min(max(u, 0), 1),
+                min(max(v, 0), 1)
+            )
+        }
+        return nil
+    }
 }
 
 final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
@@ -87,19 +230,22 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
     private let spherePipeline: MTLRenderPipelineState
+    private let flatVideoPipeline: MTLRenderPipelineState
     private let hudPipeline: MTLRenderPipelineState
     private let reticlePipeline: MTLRenderPipelineState
     private let fallbackDistortionPipeline: MTLRenderPipelineState
+    private let copyPipeline: MTLRenderPipelineState
     private let textureCache: CVMetalTextureCache
     private let textureLoader: MTKTextureLoader
     private let cardboard: CardboardRuntimeBridge
     private let sphere360: (vertices: MTLBuffer, indices: MTLBuffer, count: Int)
     private let hemisphere180: (vertices: MTLBuffer, indices: MTLBuffer, count: Int)
     private let hudVertices: MTLBuffer
+    private let hudVertexCount: Int
     private let inFlightSemaphore = DispatchSemaphore(value: 2)
     private let stateLock = NSLock()
     private var storedFrameProvider: VideoFrameProvider?
-    private var settings = VRRenderSettings(projection: .sphere360, stereoLayout: .mono)
+    private var settings = VRRenderSettings(preferences: .default)
     private var hudState: VRHUDState?
     private var hudTexture: MTLTexture?
     private var actionHandler: (@Sendable (VRControlActivation) -> Void)?
@@ -112,19 +258,26 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     private var panelModelMatrix = matrix_identity_float4x4
     private var dwellTracker = GazeDwellTracker()
     private var gestureDetector = HeadGestureDetector()
+    private var manualYaw: Float = 0
+    private var manualPitch: Float = 0
+    private var latestTrackedHeadAngles: VRHeadAngles?
+    private var contentReferenceAngles: VRHeadAngles?
+    private var contentRecenterPending = false
 
     init?(view: MTKView) {
         guard let device = view.device ?? MTLCreateSystemDefaultDevice(),
               let commandQueue = device.makeCommandQueue(),
               let library = device.makeDefaultLibrary(),
               let sphereVertex = library.makeFunction(name: "sphereVertex"),
+              let flatVideoVertex = library.makeFunction(name: "flatVideoVertex"),
               let yuvFragment = library.makeFunction(name: "yuvFragment"),
               let hudVertex = library.makeFunction(name: "hudVertex"),
               let hudFragment = library.makeFunction(name: "hudFragment"),
               let reticleVertex = library.makeFunction(name: "reticleVertex"),
               let reticleFragment = library.makeFunction(name: "reticleFragment"),
               let fullScreenVertex = library.makeFunction(name: "fullScreenVertex"),
-              let distortionFragment = library.makeFunction(name: "distortionFragment")
+              let distortionFragment = library.makeFunction(name: "distortionFragment"),
+              let copyFragment = library.makeFunction(name: "copyFragment")
         else { return nil }
 
         self.device = device
@@ -142,6 +295,15 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
             return nil
         }
         self.spherePipeline = spherePipeline
+
+        let flatVideoDescriptor = MTLRenderPipelineDescriptor()
+        flatVideoDescriptor.vertexFunction = flatVideoVertex
+        flatVideoDescriptor.fragmentFunction = yuvFragment
+        flatVideoDescriptor.colorAttachments[0].pixelFormat = .bgra8Unorm
+        guard let flatVideoPipeline = try? device.makeRenderPipelineState(descriptor: flatVideoDescriptor) else {
+            return nil
+        }
+        self.flatVideoPipeline = flatVideoPipeline
 
         let hudDescriptor = MTLRenderPipelineDescriptor()
         hudDescriptor.vertexFunction = hudVertex
@@ -172,6 +334,15 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         }
         self.fallbackDistortionPipeline = fallbackDistortionPipeline
 
+        let copyDescriptor = MTLRenderPipelineDescriptor()
+        copyDescriptor.vertexFunction = fullScreenVertex
+        copyDescriptor.fragmentFunction = copyFragment
+        copyDescriptor.colorAttachments[0].pixelFormat = view.colorPixelFormat
+        guard let copyPipeline = try? device.makeRenderPipelineState(descriptor: copyDescriptor) else {
+            return nil
+        }
+        self.copyPipeline = copyPipeline
+
         var cache: CVMetalTextureCache?
         guard CVMetalTextureCacheCreate(nil, nil, device, nil, &cache) == kCVReturnSuccess,
               let cache
@@ -180,21 +351,13 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
 
         sphere360 = Self.makeSphere(device: device, horizontalRadians: VRUVMapping.horizontalRadians(for: .sphere360))
         hemisphere180 = Self.makeSphere(device: device, horizontalRadians: VRUVMapping.horizontalRadians(for: .hemisphere180))
-        let panelWidth = VRHUDGeometry.panelWidth
-        let panelHeight = VRHUDGeometry.panelHeight
-        let panelVertices: [HUDVertex] = [
-            HUDVertex(position: SIMD3(-panelWidth / 2, panelHeight / 2, 0), textureCoordinate: SIMD2(0, 0)),
-            HUDVertex(position: SIMD3(panelWidth / 2, panelHeight / 2, 0), textureCoordinate: SIMD2(1, 0)),
-            HUDVertex(position: SIMD3(-panelWidth / 2, -panelHeight / 2, 0), textureCoordinate: SIMD2(0, 1)),
-            HUDVertex(position: SIMD3(-panelWidth / 2, -panelHeight / 2, 0), textureCoordinate: SIMD2(0, 1)),
-            HUDVertex(position: SIMD3(panelWidth / 2, panelHeight / 2, 0), textureCoordinate: SIMD2(1, 0)),
-            HUDVertex(position: SIMD3(panelWidth / 2, -panelHeight / 2, 0), textureCoordinate: SIMD2(1, 1)),
-        ]
+        let panelVertices = Self.makeHUDVertices()
         guard let hudVertices = device.makeBuffer(
             bytes: panelVertices,
             length: panelVertices.count * MemoryLayout<HUDVertex>.stride
         ) else { return nil }
         self.hudVertices = hudVertices
+        hudVertexCount = panelVertices.count
         cardboard = CardboardRuntimeBridge(device: device, pixelFormat: view.colorPixelFormat)
 
         super.init()
@@ -209,6 +372,7 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     ) {
         stateLock.lock()
         let hudChanged = self.hudState != hudState
+        let previousSettings = self.settings
         stateLock.unlock()
 
         let texture: MTLTexture?
@@ -223,6 +387,15 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
             )
         } else {
             texture = nil
+        }
+
+        let enteredThreeDFill = settings.presentationMode == .threeD
+            && settings.threeDMode == .fill
+            && (previousSettings.presentationMode != .threeD || previousSettings.threeDMode != .fill)
+        if enteredThreeDFill {
+            interactionLock.lock()
+            contentRecenterPending = true
+            interactionLock.unlock()
         }
 
         stateLock.lock()
@@ -248,7 +421,33 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     }
 
     func recenter() {
-        cardboard.recenterHeadTracking()
+        stateLock.lock()
+        let presentationMode = settings.presentationMode
+        let threeDMode = settings.threeDMode
+        stateLock.unlock()
+
+        interactionLock.lock()
+        manualYaw = 0
+        manualPitch = 0
+        if presentationMode == .threeD, threeDMode == .fill {
+            if let latestTrackedHeadAngles {
+                contentReferenceAngles = latestTrackedHeadAngles
+                contentRecenterPending = false
+            } else {
+                contentRecenterPending = true
+            }
+        }
+        interactionLock.unlock()
+        if presentationMode == .panorama {
+            cardboard.recenterHeadTracking()
+        }
+    }
+
+    func adjustManualLook(deltaX: Float, deltaY: Float) {
+        interactionLock.lock()
+        manualYaw -= deltaX * 0.004
+        manualPitch = min(max(manualPitch - deltaY * 0.004, -.pi * 0.48), .pi * 0.48)
+        interactionLock.unlock()
     }
 
     func pauseTracking() {
@@ -307,16 +506,26 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
             lastVideoFrame = newFrame
         }
 
+        cardboard.updateDistortionStrengthMultiplier(
+            VRDistortionTuning.multiplier(for: currentSettings.distortionStrength),
+            edgeCorrectionMultiplier: VRDistortionTuning.multiplier(for: currentSettings.edgeCorrection)
+        )
         cardboard.updateDrawableWidth(eyeTexture.width, height: eyeTexture.height)
         let interfaceOrientation = view.window?.windowScene?.effectiveGeometry.interfaceOrientation
             ?? .landscapeLeft
         let deviceOrientation = VROrientationMapping.deviceOrientation(
             for: interfaceOrientation
         )
-        let headView = cardboard.headViewMatrix(
+        let trackedHeadView = cardboard.headViewMatrix(
             forTimestamp: presentationTime,
             deviceOrientation: deviceOrientation
         )
+        let trackedHeadAngles = VRFlatVideoLayout.headAngles(fromHeadView: trackedHeadView)
+        let contentReferenceAngles = updateContentTracking(
+            headAngles: trackedHeadAngles,
+            settings: currentSettings
+        )
+        let headView = manualLookMatrix() * trackedHeadView
 
         applyVisibilityRequest(headView: headView)
         if isRecenterCountdownVisible {
@@ -358,8 +567,11 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
                 encoder: eyeEncoder,
                 eyeTexture: eyeTexture,
                 textures: (videoResources.luma, videoResources.chroma),
+                pixelBuffer: videoResources.pixelBuffer,
                 settings: currentSettings,
-                headView: headView
+                headView: headView,
+                trackedHeadAngles: trackedHeadAngles,
+                contentReferenceAngles: contentReferenceAngles
             )
         }
         if (controlsVisible || isRecenterCountdownVisible), let currentHUDTexture {
@@ -375,15 +587,17 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
                 eyeTexture: eyeTexture,
                 texture: currentHUDTexture,
                 headView: headView,
-                modelMatrix: modelMatrix
+                modelMatrix: modelMatrix,
+                settings: currentSettings
             )
         }
-        if !isRecenterCountdownVisible {
+        if controlsVisible, !isRecenterCountdownVisible {
             drawReticle(
                 encoder: eyeEncoder,
                 eyeTexture: eyeTexture,
                 active: controlsVisible && dwellTracker.target != nil,
-                progress: dwellTracker.progress
+                progress: dwellTracker.progress,
+                settings: currentSettings
             )
         }
         eyeEncoder.endEncoding()
@@ -391,18 +605,30 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         guard let displayPass = view.currentRenderPassDescriptor,
               let displayEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: displayPass)
         else { return }
-        if cardboard.isReady {
+        if currentSettings.usesDualEyeViewports,
+           currentSettings.displayMode == .fishEye,
+           cardboard.isReady {
             cardboard.renderEyeTexture(
                 eyeTexture,
                 commandEncoder: displayEncoder,
                 screenWidth: eyeTexture.width,
                 screenHeight: eyeTexture.height
             )
-        } else {
+        } else if currentSettings.usesDualEyeViewports,
+                  currentSettings.displayMode == .fishEye {
             displayEncoder.setRenderPipelineState(fallbackDistortionPipeline)
             displayEncoder.setFragmentTexture(eyeTexture, index: 0)
-            var distortion = DistortionUniforms(k1: 0.12, k2: 0.05, horizontalInset: 0.02, verticalInset: 0.04)
+            var distortion = DistortionUniforms(
+                k1: VRDistortionTuning.coefficient(base: 0.12, adjustment: currentSettings.distortionStrength),
+                k2: VRDistortionTuning.coefficient(base: 0.05, adjustment: currentSettings.edgeCorrection),
+                horizontalInset: 0.02,
+                verticalInset: 0.04
+            )
             displayEncoder.setFragmentBytes(&distortion, length: MemoryLayout<DistortionUniforms>.stride, index: 0)
+            displayEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+        } else {
+            displayEncoder.setRenderPipelineState(copyPipeline)
+            displayEncoder.setFragmentTexture(eyeTexture, index: 0)
             displayEncoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
         }
         displayEncoder.endEncoding()
@@ -421,23 +647,62 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         encoder: MTLRenderCommandEncoder,
         eyeTexture: MTLTexture,
         textures: (luma: MTLTexture, chroma: MTLTexture),
+        pixelBuffer: CVPixelBuffer,
+        settings: VRRenderSettings,
+        headView: simd_float4x4,
+        trackedHeadAngles: VRHeadAngles,
+        contentReferenceAngles: VRHeadAngles
+    ) {
+        encoder.setFragmentTexture(textures.luma, index: 0)
+        encoder.setFragmentTexture(textures.chroma, index: 1)
+        var colorUniforms = ColorUniforms(
+            brightness: Float(settings.brightness) / 200,
+            contrast: 1 + Float(settings.contrast) / 100,
+            saturation: 1 + Float(settings.saturation) / 100
+        )
+        encoder.setFragmentBytes(&colorUniforms, length: MemoryLayout<ColorUniforms>.stride, index: 0)
+
+        if settings.presentationMode == .panorama {
+            drawPanoramaVideo(
+                encoder: encoder,
+                eyeTexture: eyeTexture,
+                settings: settings,
+                headView: headView
+            )
+        } else {
+            drawFlatVideo(
+                encoder: encoder,
+                eyeTexture: eyeTexture,
+                pixelBuffer: pixelBuffer,
+                settings: settings,
+                trackedHeadAngles: trackedHeadAngles,
+                contentReferenceAngles: contentReferenceAngles
+            )
+        }
+    }
+
+    private func drawPanoramaVideo(
+        encoder: MTLRenderCommandEncoder,
+        eyeTexture: MTLTexture,
         settings: VRRenderSettings,
         headView: simd_float4x4
     ) {
         encoder.setRenderPipelineState(spherePipeline)
-        encoder.setFragmentTexture(textures.luma, index: 0)
-        encoder.setFragmentTexture(textures.chroma, index: 1)
         let mesh = settings.projection == .sphere360 ? sphere360 : hemisphere180
         encoder.setVertexBuffer(mesh.vertices, offset: 0, index: 0)
-        let eyeWidth = Double(eyeTexture.width) / 2
-        let height = Double(eyeTexture.height)
+        let viewCount = settings.usesDualEyeViewports ? 2 : 1
 
-        for eye in 0..<2 {
-            setViewport(encoder: encoder, eye: eye, eyeWidth: eyeWidth, height: height)
+        for eye in 0..<viewCount {
+            let viewport = setViewport(encoder: encoder, eye: eye, eyeTexture: eyeTexture, settings: settings)
             var uniforms = SphereUniforms(
-                modelViewProjection: eyeViewProjection(eye: eye, headView: headView, fallbackAspect: Float(eyeWidth / height)),
+                modelViewProjection: eyeViewProjection(
+                    eye: eye,
+                    headView: headView,
+                    fallbackAspect: Float(viewport.width / viewport.height),
+                    settings: settings
+                ),
                 eyeIndex: UInt32(eye),
-                stereoLayout: settings.stereoLayout == .sideBySide ? 1 : 0
+                stereoLayout: stereoLayoutValue(settings.effectiveStereoLayout)
             )
             encoder.setVertexBytes(&uniforms, length: MemoryLayout<SphereUniforms>.stride, index: 1)
             encoder.drawIndexedPrimitives(
@@ -450,26 +715,88 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         }
     }
 
+    private func drawFlatVideo(
+        encoder: MTLRenderCommandEncoder,
+        eyeTexture: MTLTexture,
+        pixelBuffer: CVPixelBuffer,
+        settings: VRRenderSettings,
+        trackedHeadAngles: VRHeadAngles,
+        contentReferenceAngles: VRHeadAngles
+    ) {
+        encoder.setRenderPipelineState(flatVideoPipeline)
+        let normalizedViewport = VRDisplayGeometry.viewport(
+            eye: 0,
+            preferences: settings.renderPreferences
+        )
+        let viewportSize = SIMD2<Float>(
+            Float(normalizedViewport.width * Double(eyeTexture.width)),
+            Float(normalizedViewport.height * Double(eyeTexture.height))
+        )
+        let displaySize = CVImageBufferGetDisplaySize(pixelBuffer)
+        let sourceSize: SIMD2<Float>
+        if displaySize.width > 0, displaySize.height > 0 {
+            sourceSize = SIMD2(Float(displaySize.width), Float(displaySize.height))
+        } else {
+            sourceSize = SIMD2(
+                Float(CVPixelBufferGetWidth(pixelBuffer)),
+                Float(CVPixelBufferGetHeight(pixelBuffer))
+            )
+        }
+
+        let geometry: VRFlatVideoGeometry
+        if settings.presentationMode == .threeD, settings.threeDMode == .fill {
+            geometry = VRFlatVideoLayout.fill(
+                sourceSize: sourceSize,
+                viewportSize: viewportSize,
+                headAngles: trackedHeadAngles,
+                referenceAngles: contentReferenceAngles,
+                fieldOfView: flatVideoFieldOfView(
+                    settings: settings,
+                    fallbackAspect: viewportSize.x / max(viewportSize.y, 1)
+                )
+            )
+        } else {
+            geometry = VRFlatVideoLayout.fit(sourceSize: sourceSize, viewportSize: viewportSize)
+        }
+
+        var uniforms = FlatVideoUniforms(
+            positionScale: geometry.positionScale,
+            uvOrigin: geometry.uvOrigin,
+            uvSize: geometry.uvSize
+        )
+        encoder.setVertexBytes(&uniforms, length: MemoryLayout<FlatVideoUniforms>.stride, index: 0)
+        let viewCount = settings.usesDualEyeViewports ? 2 : 1
+        for eye in 0..<viewCount {
+            setViewport(encoder: encoder, eye: eye, eyeTexture: eyeTexture, settings: settings)
+            encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+        }
+    }
+
     private func drawHUD(
         encoder: MTLRenderCommandEncoder,
         eyeTexture: MTLTexture,
         texture: MTLTexture,
         headView: simd_float4x4,
-        modelMatrix: simd_float4x4
+        modelMatrix: simd_float4x4,
+        settings: VRRenderSettings
     ) {
         encoder.setRenderPipelineState(hudPipeline)
         encoder.setVertexBuffer(hudVertices, offset: 0, index: 0)
         encoder.setFragmentTexture(texture, index: 0)
-        let eyeWidth = Double(eyeTexture.width) / 2
-        let height = Double(eyeTexture.height)
+        let viewCount = settings.usesDualEyeViewports ? 2 : 1
 
-        for eye in 0..<2 {
-            setViewport(encoder: encoder, eye: eye, eyeWidth: eyeWidth, height: height)
+        for eye in 0..<viewCount {
+            let viewport = setViewport(encoder: encoder, eye: eye, eyeTexture: eyeTexture, settings: settings)
             var uniforms = HUDUniforms(
-                modelViewProjection: eyeViewProjection(eye: eye, headView: headView, fallbackAspect: Float(eyeWidth / height)) * modelMatrix
+                modelViewProjection: eyeViewProjection(
+                    eye: eye,
+                    headView: headView,
+                    fallbackAspect: Float(viewport.width / viewport.height),
+                    settings: settings
+                ) * modelMatrix
             )
             encoder.setVertexBytes(&uniforms, length: MemoryLayout<HUDUniforms>.stride, index: 1)
-            encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
+            encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: hudVertexCount)
         }
     }
 
@@ -477,16 +804,16 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         encoder: MTLRenderCommandEncoder,
         eyeTexture: MTLTexture,
         active: Bool,
-        progress: Float
+        progress: Float,
+        settings: VRRenderSettings
     ) {
         encoder.setRenderPipelineState(reticlePipeline)
-        let eyeWidth = Double(eyeTexture.width) / 2
-        let height = Double(eyeTexture.height)
-        for eye in 0..<2 {
-            setViewport(encoder: encoder, eye: eye, eyeWidth: eyeWidth, height: height)
+        let viewCount = settings.usesDualEyeViewports ? 2 : 1
+        for eye in 0..<viewCount {
+            let viewport = setViewport(encoder: encoder, eye: eye, eyeTexture: eyeTexture, settings: settings)
             let radiusPixels: Float = active ? 25 : 18
             var uniforms = ReticleUniforms(
-                ndcScale: SIMD2(radiusPixels * 2 / Float(eyeWidth), radiusPixels * 2 / Float(height)),
+                ndcScale: SIMD2(radiusPixels * 2 / Float(viewport.width), radiusPixels * 2 / Float(viewport.height)),
                 progress: progress,
                 active: active ? 1 : 0
             )
@@ -499,12 +826,12 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     private func eyeViewProjection(
         eye: Int,
         headView: simd_float4x4,
-        fallbackAspect: Float
+        fallbackAspect: Float,
+        settings: VRRenderSettings
     ) -> simd_float4x4 {
-        if cardboard.isReady {
-            let projection = VRPoseMath.metalProjection(
-                fromCardboardProjection: cardboard.projectionMatrix(forEye: eye)
-            )
+        let preferences = settings.renderPreferences
+        if settings.usesDualEyeViewports, cardboard.isReady {
+            let projection = adjustedCardboardProjection(eye: eye, settings: settings)
             return VRPoseMath.eyeViewProjection(
                 projection: projection,
                 eyeFromHead: cardboard.eyeFromHeadMatrix(forEye: eye),
@@ -512,14 +839,14 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
             )
         }
         let projection = simd_float4x4.perspective(
-            verticalFieldOfView: .pi / 2,
+            verticalFieldOfView: VRDisplayGeometry.verticalFieldOfView(preferences: preferences),
             aspectRatio: fallbackAspect,
             near: 0.01,
             far: 10
         )
-        let fallbackIPD: Float = 0.064
+        let halfIPD: Float = settings.usesDualEyeViewports ? 0.032 : 0
         let eyeFromHead = simd_float4x4.translation(
-            x: eye == 0 ? fallbackIPD * 0.5 : -fallbackIPD * 0.5,
+            x: eye == 0 ? halfIPD : -halfIPD,
             y: 0,
             z: 0
         )
@@ -530,22 +857,47 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         )
     }
 
+    private func adjustedCardboardProjection(
+        eye: Int,
+        settings: VRRenderSettings
+    ) -> simd_float4x4 {
+        var projection = VRPoseMath.metalProjection(
+            fromCardboardProjection: cardboard.projectionMatrix(forEye: eye)
+        )
+        let distanceAmount = Float(settings.eyeDistance) / 100
+        let fieldOfViewScale = 1 - distanceAmount * 0.36
+        projection.columns.0.x *= fieldOfViewScale
+        projection.columns.1.y *= fieldOfViewScale
+        return projection
+    }
+
+    private func flatVideoFieldOfView(
+        settings: VRRenderSettings,
+        fallbackAspect: Float
+    ) -> VRFieldOfView {
+        if settings.usesDualEyeViewports, cardboard.isReady,
+           let fieldOfView = VRFieldOfView.conservative(projections: [
+               adjustedCardboardProjection(eye: 0, settings: settings),
+               adjustedCardboardProjection(eye: 1, settings: settings),
+           ]) {
+            return fieldOfView
+        }
+        return VRFieldOfView.symmetric(
+            verticalRadians: VRDisplayGeometry.verticalFieldOfView(preferences: settings.renderPreferences),
+            aspectRatio: fallbackAspect
+        )
+    }
+
     private func gazeHit(headView: simd_float4x4, state: VRHUDState) -> VRControlHit? {
         let panelFromHead = simd_inverse(panelModelMatrix) * simd_inverse(headView)
         let origin4 = panelFromHead * SIMD4<Float>(0, 0, 0, 1)
         let forward4 = panelFromHead * SIMD4<Float>(0, 0, -1, 1)
         let direction = SIMD3<Float>(forward4.x - origin4.x, forward4.y - origin4.y, forward4.z - origin4.z)
-        guard abs(direction.z) > 0.0001 else { return nil }
-        let distance = -origin4.z / direction.z
-        guard distance > 0 else { return nil }
-        let point = SIMD2<Float>(
-            origin4.x + direction.x * distance,
-            origin4.y + direction.y * distance
-        )
-        let panelWidth = VRHUDGeometry.panelWidth
-        let panelHeight = VRHUDGeometry.panelHeight
-        let normalized = SIMD2<Float>(point.x / panelWidth + 0.5, 0.5 - point.y / panelHeight)
-        return VRHUDLayout.hitTest(state: state, point: normalized)
+        guard let textureCoordinate = VRHUDGeometry.textureCoordinate(
+            rayOrigin: SIMD3(origin4.x, origin4.y, origin4.z),
+            rayDirection: direction
+        ) else { return nil }
+        return VRHUDLayout.hitTest(state: state, point: textureCoordinate)
     }
 
     private func applyVisibilityRequest(headView: simd_float4x4) {
@@ -635,22 +987,73 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         )
     }
 
+    @discardableResult
     private func setViewport(
         encoder: MTLRenderCommandEncoder,
         eye: Int,
-        eyeWidth: Double,
-        height: Double
-    ) {
-        encoder.setViewport(
-            MTLViewport(
-                originX: Double(eye) * eyeWidth,
-                originY: 0,
-                width: eyeWidth,
-                height: height,
-                znear: 0,
-                zfar: 1
-            )
+        eyeTexture: MTLTexture,
+        settings: VRRenderSettings
+    ) -> MTLViewport {
+        let normalized = VRDisplayGeometry.viewport(eye: eye, preferences: settings.renderPreferences)
+        let viewport = MTLViewport(
+            originX: normalized.x * Double(eyeTexture.width),
+            originY: normalized.y * Double(eyeTexture.height),
+            width: normalized.width * Double(eyeTexture.width),
+            height: normalized.height * Double(eyeTexture.height),
+            znear: 0,
+            zfar: 1
         )
+        encoder.setViewport(viewport)
+        if settings.usesDualEyeViewports {
+            let halfWidth = eyeTexture.width / 2
+            let safeEye = min(max(eye, 0), 1)
+            encoder.setScissorRect(
+                MTLScissorRect(
+                    x: safeEye == 0 ? 0 : halfWidth,
+                    y: 0,
+                    width: safeEye == 0 ? halfWidth : eyeTexture.width - halfWidth,
+                    height: eyeTexture.height
+                )
+            )
+        } else {
+            encoder.setScissorRect(
+                MTLScissorRect(x: 0, y: 0, width: eyeTexture.width, height: eyeTexture.height)
+            )
+        }
+        return viewport
+    }
+
+    private func stereoLayoutValue(_ layout: StereoLayout) -> UInt32 {
+        switch layout {
+        case .mono: 0
+        case .sideBySide: 1
+        case .topBottom: 2
+        }
+    }
+
+    private func manualLookMatrix() -> simd_float4x4 {
+        interactionLock.lock()
+        let yaw = manualYaw
+        let pitch = manualPitch
+        interactionLock.unlock()
+        return simd_float4x4.rotationX(pitch) * simd_float4x4.rotationY(yaw)
+    }
+
+    private func updateContentTracking(
+        headAngles: VRHeadAngles,
+        settings: VRRenderSettings
+    ) -> VRHeadAngles {
+        interactionLock.lock()
+        defer { interactionLock.unlock() }
+        latestTrackedHeadAngles = headAngles
+        if settings.presentationMode == .threeD, settings.threeDMode == .fill {
+            if contentRecenterPending || contentReferenceAngles == nil {
+                contentReferenceAngles = headAngles
+                contentRecenterPending = false
+            }
+            return contentReferenceAngles ?? headAngles
+        }
+        return contentReferenceAngles ?? headAngles
     }
 
     private static func pitch(fromHeadView headView: simd_float4x4) -> Float {
@@ -666,6 +1069,46 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         attachment?.destinationRGBBlendFactor = .oneMinusSourceAlpha
         attachment?.sourceAlphaBlendFactor = .one
         attachment?.destinationAlphaBlendFactor = .oneMinusSourceAlpha
+    }
+
+    private static func makeHUDVertices() -> [HUDVertex] {
+        var vertices: [HUDVertex] = []
+        vertices.reserveCapacity(VRHUDGeometry.horizontalSegmentCount * 6)
+
+        for segment in 0..<VRHUDGeometry.horizontalSegmentCount {
+            let leftU = Float(segment) / Float(VRHUDGeometry.horizontalSegmentCount)
+            let rightU = Float(segment + 1) / Float(VRHUDGeometry.horizontalSegmentCount)
+            let topLeftUV = SIMD2<Float>(leftU, 0)
+            let topRightUV = SIMD2<Float>(rightU, 0)
+            let bottomLeftUV = SIMD2<Float>(leftU, 1)
+            let bottomRightUV = SIMD2<Float>(rightU, 1)
+
+            vertices.append(HUDVertex(
+                position: VRHUDGeometry.surfacePoint(textureCoordinate: topLeftUV),
+                textureCoordinate: topLeftUV
+            ))
+            vertices.append(HUDVertex(
+                position: VRHUDGeometry.surfacePoint(textureCoordinate: topRightUV),
+                textureCoordinate: topRightUV
+            ))
+            vertices.append(HUDVertex(
+                position: VRHUDGeometry.surfacePoint(textureCoordinate: bottomLeftUV),
+                textureCoordinate: bottomLeftUV
+            ))
+            vertices.append(HUDVertex(
+                position: VRHUDGeometry.surfacePoint(textureCoordinate: bottomLeftUV),
+                textureCoordinate: bottomLeftUV
+            ))
+            vertices.append(HUDVertex(
+                position: VRHUDGeometry.surfacePoint(textureCoordinate: topRightUV),
+                textureCoordinate: topRightUV
+            ))
+            vertices.append(HUDVertex(
+                position: VRHUDGeometry.surfacePoint(textureCoordinate: bottomRightUV),
+                textureCoordinate: bottomRightUV
+            ))
+        }
+        return vertices
     }
 
     private static func makeSphere(
@@ -723,4 +1166,5 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         )!
         return (vertexBuffer, indexBuffer, indices.count)
     }
+
 }

@@ -213,8 +213,6 @@ private struct PlaylistRow: View {
 
                 HStack(spacing: 6) {
                     Label(item.sourceKind == .remote ? "SMB" : "Local", systemImage: item.sourceKind == .remote ? "network" : "iphone")
-                    Text(item.projection.title)
-                    Text(item.stereoLayout.title)
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)

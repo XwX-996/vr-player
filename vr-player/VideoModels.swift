@@ -18,6 +18,7 @@ nonisolated enum VRProjection: String, CaseIterable, Codable, Identifiable, Send
 nonisolated enum StereoLayout: String, CaseIterable, Codable, Identifiable, Sendable {
     case mono
     case sideBySide
+    case topBottom
 
     var id: String { rawValue }
 
@@ -25,6 +26,7 @@ nonisolated enum StereoLayout: String, CaseIterable, Codable, Identifiable, Send
         switch self {
         case .mono: "Mono"
         case .sideBySide: "SBS"
+        case .topBottom: "Top/Bottom"
         }
     }
 }
@@ -93,12 +95,21 @@ nonisolated enum PlaybackCommand: Equatable, Sendable {
     case restart
 }
 
+nonisolated enum PlaybackEndAction: Equatable, Sendable {
+    case finish
+    case repeatCurrent
+}
+
 nonisolated enum PlaybackControl {
     static func toggleCommand(phase: PlaybackPhase, playbackRequested: Bool) -> PlaybackCommand {
         if playbackRequested {
             return .pause
         }
         return phase == .ended ? .restart : .play
+    }
+
+    static func endAction(repeatsCurrentItem: Bool) -> PlaybackEndAction {
+        repeatsCurrentItem ? .repeatCurrent : .finish
     }
 }
 

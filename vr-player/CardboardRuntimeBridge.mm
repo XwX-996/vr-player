@@ -1,17 +1,22 @@
 #import "CardboardRuntimeBridge.h"
 
 #import "cardboard.h"
+#import "cardboard_device.pb.h"
 
 #import <QuartzCore/QuartzCore.h>
 
 #include <algorithm>
 #include <cmath>
 #include <mutex>
+#include <string>
 
 namespace {
 
 constexpr float kNearPlane = 0.01f;
 constexpr float kFarPlane = 10.0f;
+constexpr float kMinimumDistortionMultiplier = 0.5f;
+constexpr float kMaximumDistortionMultiplier = 1.5f;
+constexpr CFTimeInterval kDistortionRebuildInterval = 1.0 / 20.0;
 
 uint64_t MetalObjectAddress(id object) {
   return static_cast<uint64_t>(
@@ -70,6 +75,32 @@ CardboardViewportOrientation CardboardOrientation(
   }
 }
 
+NSData *ProfileByApplyingDistortionMultipliers(
+    const uint8_t *profileBytes, int profileSize, float strengthMultiplier,
+    float edgeCorrectionMultiplier) {
+  cardboard::DeviceParams deviceParams;
+  if (profileBytes == nullptr || profileSize <= 0 ||
+      !deviceParams.ParseFromArray(profileBytes, profileSize)) {
+    return nil;
+  }
+
+  if (deviceParams.distortion_coefficients_size() > 0) {
+    deviceParams.set_distortion_coefficients(
+        0, deviceParams.distortion_coefficients(0) * strengthMultiplier);
+  }
+  if (deviceParams.distortion_coefficients_size() > 1) {
+    deviceParams.set_distortion_coefficients(
+        1, deviceParams.distortion_coefficients(1) * edgeCorrectionMultiplier);
+  }
+
+  std::string encodedProfile;
+  if (!deviceParams.SerializeToString(&encodedProfile)) {
+    return nil;
+  }
+  return [NSData dataWithBytes:encodedProfile.data()
+                         length:encodedProfile.size()];
+}
+
 }  // namespace
 
 @implementation CardboardRuntimeBridge {
@@ -83,6 +114,10 @@ CardboardViewportOrientation CardboardOrientation(
   NSData *_viewerProfile;
   NSInteger _drawableWidth;
   NSInteger _drawableHeight;
+  float _distortionStrengthMultiplier;
+  float _edgeCorrectionMultiplier;
+  BOOL _distortionConfigurationDirty;
+  CFTimeInterval _lastDistortionRebuildTime;
 }
 
 - (instancetype)initWithDevice:(id<MTLDevice>)device
@@ -91,6 +126,9 @@ CardboardViewportOrientation CardboardOrientation(
   if (self) {
     _device = device;
     _pixelFormat = pixelFormat;
+    _distortionStrengthMultiplier = 1.0f;
+    _edgeCorrectionMultiplier = 1.0f;
+    _distortionConfigurationDirty = YES;
     _profileName = @"Cardboard v1 fallback";
     _headTracker = CardboardHeadTracker_create();
     if (_headTracker != nullptr) {
@@ -180,10 +218,39 @@ CardboardViewportOrientation CardboardOrientation(
   }
 }
 
-- (void)updateDrawableWidth:(NSInteger)width height:(NSInteger)height {
-  if (width <= 0 || height <= 0 ||
-      (_drawableWidth == width && _drawableHeight == height && self.ready)) {
+- (void)updateDistortionStrengthMultiplier:(float)distortionStrengthMultiplier
+                  edgeCorrectionMultiplier:(float)edgeCorrectionMultiplier {
+  const float safeStrength =
+      std::clamp(distortionStrengthMultiplier, kMinimumDistortionMultiplier,
+                 kMaximumDistortionMultiplier);
+  const float safeEdge =
+      std::clamp(edgeCorrectionMultiplier, kMinimumDistortionMultiplier,
+                 kMaximumDistortionMultiplier);
+  if (std::fabs(safeStrength - _distortionStrengthMultiplier) < 0.0001f &&
+      std::fabs(safeEdge - _edgeCorrectionMultiplier) < 0.0001f) {
     return;
+  }
+
+  _distortionStrengthMultiplier = safeStrength;
+  _edgeCorrectionMultiplier = safeEdge;
+  _distortionConfigurationDirty = YES;
+}
+
+- (void)updateDrawableWidth:(NSInteger)width height:(NSInteger)height {
+  if (width <= 0 || height <= 0) {
+    return;
+  }
+
+  const BOOL drawableSizeMatches =
+      _drawableWidth == width && _drawableHeight == height;
+  if (drawableSizeMatches && self.ready) {
+    if (!_distortionConfigurationDirty) {
+      return;
+    }
+    if (CACurrentMediaTime() - _lastDistortionRebuildTime <
+        kDistortionRebuildInterval) {
+      return;
+    }
   }
 
   _drawableWidth = width;
@@ -206,6 +273,18 @@ CardboardViewportOrientation CardboardOrientation(
 
   if (profileBytes == nullptr || profileSize == 0) {
     return;
+  }
+
+  NSData *adjustedProfile = nil;
+  if (std::fabs(_distortionStrengthMultiplier - 1.0f) >= 0.0001f ||
+      std::fabs(_edgeCorrectionMultiplier - 1.0f) >= 0.0001f) {
+    adjustedProfile = ProfileByApplyingDistortionMultipliers(
+        profileBytes, profileSize, _distortionStrengthMultiplier,
+        _edgeCorrectionMultiplier);
+    if (adjustedProfile.length > 0) {
+      profileBytes = static_cast<const uint8_t *>(adjustedProfile.bytes);
+      profileSize = static_cast<int>(adjustedProfile.length);
+    }
   }
 
   _lensDistortion = CardboardLensDistortion_create(
@@ -232,6 +311,8 @@ CardboardViewportOrientation CardboardOrientation(
   CardboardLensDistortion_getDistortionMesh(_lensDistortion, kRight, &rightMesh);
   CardboardDistortionRenderer_setMesh(_distortionRenderer, &leftMesh, kLeft);
   CardboardDistortionRenderer_setMesh(_distortionRenderer, &rightMesh, kRight);
+  _distortionConfigurationDirty = NO;
+  _lastDistortionRebuildTime = CACurrentMediaTime();
 }
 
 - (matrix_float4x4)projectionMatrixForEye:(NSInteger)eye {

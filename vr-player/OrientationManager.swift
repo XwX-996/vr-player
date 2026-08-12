@@ -9,7 +9,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
 #if DEBUG
-        if ProcessInfo.processInfo.arguments.contains("--hud-preview") {
+        if ProcessInfo.processInfo.arguments.contains("--hud-preview")
+            || ProcessInfo.processInfo.arguments.contains("--manual-controls-preview") {
             Self.supportedOrientations = .landscape
         }
 #endif

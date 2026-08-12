@@ -15,7 +15,9 @@ struct vr_playerApp: App {
     var body: some Scene {
         WindowGroup {
 #if DEBUG
-            if ProcessInfo.processInfo.arguments.contains("--hud-preview") {
+            if ProcessInfo.processInfo.arguments.contains("--manual-controls-preview") {
+                ManualControlsPreviewScreen()
+            } else if ProcessInfo.processInfo.arguments.contains("--hud-preview") {
                 VRHUDPreviewScreen()
             } else {
                 ContentView()

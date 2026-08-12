@@ -16,6 +16,8 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithDevice:(id<MTLDevice>)device
                     pixelFormat:(MTLPixelFormat)pixelFormat;
 
+- (void)updateDistortionStrengthMultiplier:(float)distortionStrengthMultiplier
+                  edgeCorrectionMultiplier:(float)edgeCorrectionMultiplier;
 - (void)updateDrawableWidth:(NSInteger)width height:(NSInteger)height;
 - (matrix_float4x4)headViewMatrixForTimestamp:(NSTimeInterval)timestamp
                             deviceOrientation:(UIDeviceOrientation)deviceOrientation;

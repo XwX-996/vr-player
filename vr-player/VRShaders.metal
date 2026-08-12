@@ -28,22 +28,66 @@ vertex SphereVertexOut sphereVertex(
     if (uniforms.stereoLayout == 1) {
         u = u * 0.5 + float(uniforms.eyeIndex) * 0.5;
     }
-    output.textureCoordinate = float2(u, input.textureCoordinate.y);
+    float v = input.textureCoordinate.y;
+    if (uniforms.stereoLayout == 2) {
+        v = v * 0.5 + float(uniforms.eyeIndex) * 0.5;
+    }
+    output.textureCoordinate = float2(u, v);
     return output;
 }
+
+struct FlatVideoUniforms {
+    float2 positionScale;
+    float2 uvOrigin;
+    float2 uvSize;
+};
+
+vertex SphereVertexOut flatVideoVertex(
+    uint vertexID [[vertex_id]],
+    constant FlatVideoUniforms &uniforms [[buffer(0)]]) {
+    const float2 positions[6] = {
+        float2(-1, 1), float2(1, 1), float2(-1, -1),
+        float2(-1, -1), float2(1, 1), float2(1, -1)
+    };
+    const float2 coordinates[6] = {
+        float2(0, 0), float2(1, 0), float2(0, 1),
+        float2(0, 1), float2(1, 0), float2(1, 1)
+    };
+    SphereVertexOut output;
+    output.position = float4(positions[vertexID] * uniforms.positionScale, 0, 1);
+    output.textureCoordinate = uniforms.uvOrigin + coordinates[vertexID] * uniforms.uvSize;
+    return output;
+}
+
+struct ColorUniforms {
+    float brightness;
+    float contrast;
+    float saturation;
+    float padding;
+};
 
 fragment half4 yuvFragment(
     SphereVertexOut input [[stage_in]],
     texture2d<half> lumaTexture [[texture(0)]],
-    texture2d<half> chromaTexture [[texture(1)]]) {
-    constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
+    texture2d<half> chromaTexture [[texture(1)]],
+    constant ColorUniforms &uniforms [[buffer(0)]]) {
+    constexpr sampler textureSampler(
+        mag_filter::linear,
+        min_filter::linear,
+        s_address::clamp_to_edge,
+        t_address::clamp_to_edge
+    );
     half y = lumaTexture.sample(textureSampler, input.textureCoordinate).r - half(16.0 / 255.0);
     half2 cbcr = chromaTexture.sample(textureSampler, input.textureCoordinate).rg - half2(0.5, 0.5);
     half3 rgb;
     rgb.r = half(1.164) * y + half(1.793) * cbcr.y;
     rgb.g = half(1.164) * y - half(0.213) * cbcr.x - half(0.533) * cbcr.y;
     rgb.b = half(1.164) * y + half(2.112) * cbcr.x;
-    return half4(saturate(rgb), 1.0);
+    float3 styled = float3(rgb);
+    styled = (styled - 0.5) * uniforms.contrast + 0.5 + uniforms.brightness;
+    float luminance = dot(styled, float3(0.2126, 0.7152, 0.0722));
+    styled = mix(float3(luminance), styled, uniforms.saturation);
+    return half4(half3(saturate(styled)), 1.0);
 }
 
 struct HUDVertex {
@@ -138,6 +182,13 @@ vertex FullScreenVertexOut fullScreenVertex(uint vertexID [[vertex_id]]) {
     output.position = float4(positions[vertexID], 0, 1);
     output.textureCoordinate = coordinates[vertexID];
     return output;
+}
+
+fragment half4 copyFragment(
+    FullScreenVertexOut input [[stage_in]],
+    texture2d<half> eyeTexture [[texture(0)]]) {
+    constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
+    return eyeTexture.sample(textureSampler, input.textureCoordinate);
 }
 
 struct DistortionUniforms {

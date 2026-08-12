@@ -6,6 +6,7 @@ struct PlayerScreen: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(VRPlayerPreferences.storageKey) private var preferencesData = VRPlayerPreferences.default.encoded()
 
     let playlist: [PlaylistItem]
 
@@ -19,6 +20,10 @@ struct PlayerScreen: View {
     @State private var brightnessController = ScreenBrightnessController()
     @State private var recenterRequestID: UUID?
     @State private var recenterCountdown: Int?
+    @State private var manualControlsVisible = false
+    @State private var manualControlPanel: ManualControlPanel?
+    @State private var manualControlsActivityID = UUID()
+    @State private var dragTranslation = CGSize.zero
 
     private let playlistPageSize = 5
     private let recenterCountdownStart = 3
@@ -35,10 +40,7 @@ struct PlayerScreen: View {
             if let session {
                 VRMetalSurface(
                     frameProvider: session.frameProvider,
-                    settings: VRRenderSettings(
-                        projection: currentItem.projection,
-                        stereoLayout: currentItem.stereoLayout
-                    ),
+                    settings: renderSettings,
                     hudState: makeHUDState(session: session),
                     actionHandler: { activation in
                         Task { @MainActor in
@@ -52,13 +54,10 @@ struct PlayerScreen: View {
                 }
                 .ignoresSafeArea()
                 .contentShape(Rectangle())
-                .onTapGesture {
-                    guard recenterCountdown == nil else { return }
-                    renderer?.showControls()
-                }
+                .gesture(videoGesture)
 
                 if session.phase == .preparing || session.phase == .buffering {
-                    binocularStatus(title: session.phase.title)
+                    playbackStatus(title: session.phase.title)
                 }
                 if case .failed(let message) = session.phase {
                     errorOverlay(message: message)
@@ -66,7 +65,7 @@ struct PlayerScreen: View {
             } else if let setupError {
                 errorOverlay(message: setupError)
             } else {
-                binocularStatus(title: "Preparing")
+                playbackStatus(title: "Preparing")
             }
 
             SystemVolumeHostView(controller: volumeController)
@@ -78,6 +77,32 @@ struct PlayerScreen: View {
                 .frame(width: 1, height: 1)
                 .opacity(0.001)
                 .allowsHitTesting(false)
+
+            if manualControlsVisible, let session {
+                ManualControlsOverlay(
+                    title: currentItem.name,
+                    isPlaying: session.isPlaying,
+                    position: session.position,
+                    duration: session.duration,
+                    playlist: playlist,
+                    currentItemID: currentItem.id,
+                    preferences: preferencesBinding,
+                    panel: $manualControlPanel,
+                    onClose: closePlayer,
+                    onDismiss: hideManualControls,
+                    onActivity: registerManualActivity,
+                    onRecenter: requestRecenter,
+                    onPrevious: { switchRelative(by: -1) },
+                    onPlayPause: session.togglePlayback,
+                    onNext: { switchRelative(by: 1) },
+                    onSeek: session.seek,
+                    onSelectItem: { item in
+                        open(item)
+                        manualControlPanel = nil
+                    }
+                )
+                .transition(.opacity)
+            }
         }
         .statusBarHidden()
         .persistentSystemOverlays(.hidden)
@@ -109,6 +134,16 @@ struct PlayerScreen: View {
             recenterCountdown = nil
             renderer?.recenter()
         }
+        .task(id: manualControlsActivityID) {
+            guard manualControlsVisible else { return }
+            do {
+                try await Task.sleep(for: .seconds(5))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            hideManualControls()
+        }
         .onDisappear {
             session?.shutdown()
             renderer?.pauseTracking()
@@ -120,15 +155,22 @@ struct PlayerScreen: View {
             if newPhase == .active {
                 renderer?.resumeTracking()
             } else {
+                hideManualControls()
                 recenterRequestID = nil
                 renderer?.pauseTracking()
                 session?.persistState()
                 try? modelContext.save()
             }
         }
+        .onChange(of: preferencesData) { _, data in
+            let preferences = VRPlayerPreferences.decode(data)
+            session?.setRepeatsCurrentItem(preferences.repeatsCurrentItem)
+            session?.setPlaybackRate(preferences.playbackRate)
+        }
     }
 
     private func makeHUDState(session: PlayerSession) -> VRHUDState {
+        let preferences = storedPreferences
         let pageCount = max(Int(ceil(Double(playlist.count) / Double(playlistPageSize))), 1)
         let safePage = min(max(playlistPage, 0), pageCount - 1)
         let start = min(safePage * playlistPageSize, playlist.count)
@@ -142,8 +184,10 @@ struct PlayerScreen: View {
             position: session.position,
             duration: session.duration,
             bufferedFraction: session.bufferedFraction,
-            projection: currentItem.projection,
-            stereoLayout: currentItem.stereoLayout,
+            projection: preferences.projection,
+            stereoLayout: preferences.stereoLayout,
+            presentationMode: preferences.presentationMode,
+            threeDMode: preferences.threeDMode,
             brightness: brightnessController.brightness,
             volume: volumeController.volume,
             playlistEntries: entries,
@@ -161,9 +205,7 @@ struct PlayerScreen: View {
         case .hideControls:
             renderer?.hideControls()
         case .recenter:
-            renderer?.hideControls()
-            recenterCountdown = recenterCountdownStart
-            recenterRequestID = UUID()
+            requestRecenter()
         case .previous:
             switchRelative(by: -1)
         case .playPause:
@@ -178,17 +220,31 @@ struct PlayerScreen: View {
                 session.seek(to: fraction * session.duration)
             }
         case .projection180:
-            currentItem.projection = .hemisphere180
-            saveItemSettings()
+            updatePreferences {
+                $0.presentationMode = .panorama
+                $0.projection = .hemisphere180
+            }
         case .projection360:
-            currentItem.projection = .sphere360
-            saveItemSettings()
+            updatePreferences {
+                $0.presentationMode = .panorama
+                $0.projection = .sphere360
+            }
+        case .threeDFit:
+            updatePreferences {
+                $0.presentationMode = .threeD
+                $0.threeDMode = .fit
+            }
+        case .threeDFill:
+            updatePreferences {
+                $0.presentationMode = .threeD
+                $0.threeDMode = .fill
+            }
         case .mono:
-            currentItem.stereoLayout = .mono
-            saveItemSettings()
+            guard storedPreferences.presentationMode != .threeD else { return }
+            updatePreferences { $0.stereoLayout = .mono }
         case .sideBySide:
-            currentItem.stereoLayout = .sideBySide
-            saveItemSettings()
+            guard storedPreferences.presentationMode != .threeD else { return }
+            updatePreferences { $0.stereoLayout = .sideBySide }
         case .brightness:
             if let value = activation.value {
                 brightnessController.setBrightness(value)
@@ -226,24 +282,107 @@ struct PlayerScreen: View {
         currentItem.lastPlayedAt = .now
         setupError = nil
         do {
-            session = try PlayerSession(item: item)
+            let preferences = storedPreferences
+            session = try PlayerSession(
+                item: item,
+                repeatsCurrentItem: preferences.repeatsCurrentItem,
+                playbackRate: preferences.playbackRate
+            )
         } catch {
             session = nil
             setupError = error.localizedDescription
         }
     }
 
-    private func saveItemSettings() {
-        try? modelContext.save()
+    private var storedPreferences: VRPlayerPreferences {
+        VRPlayerPreferences.decode(preferencesData)
     }
 
-    private func binocularStatus(title: String) -> some View {
-        HStack(spacing: 0) {
-            statusEye(title: title)
-            statusEye(title: title)
+    private var preferencesBinding: Binding<VRPlayerPreferences> {
+        Binding(
+            get: { storedPreferences },
+            set: { preferencesData = $0.encoded() }
+        )
+    }
+
+    private var renderSettings: VRRenderSettings {
+        VRRenderSettings(preferences: storedPreferences)
+    }
+
+    private var videoGesture: some Gesture {
+        DragGesture(minimumDistance: 0)
+            .onChanged { value in
+                guard !manualControlsVisible,
+                      storedPreferences.presentationMode == .panorama,
+                      !storedPreferences.vrGlassesEnabled,
+                      recenterCountdown == nil
+                else { return }
+                let delta = CGSize(
+                    width: value.translation.width - dragTranslation.width,
+                    height: value.translation.height - dragTranslation.height
+                )
+                dragTranslation = value.translation
+                renderer?.adjustManualLook(
+                    deltaX: Float(delta.width),
+                    deltaY: Float(delta.height)
+                )
+            }
+            .onEnded { value in
+                defer { dragTranslation = .zero }
+                guard !manualControlsVisible, recenterCountdown == nil else { return }
+                let distance = hypot(value.translation.width, value.translation.height)
+                if distance < 8 {
+                    showManualControls()
+                }
+            }
+    }
+
+    private func updatePreferences(_ update: (inout VRPlayerPreferences) -> Void) {
+        var preferences = storedPreferences
+        update(&preferences)
+        preferences.normalize()
+        preferencesData = preferences.encoded()
+    }
+
+    private func showManualControls() {
+        renderer?.hideControls()
+        manualControlPanel = nil
+        manualControlsVisible = true
+        registerManualActivity()
+    }
+
+    private func hideManualControls() {
+        withAnimation(.easeOut(duration: 0.16)) {
+            manualControlsVisible = false
+            manualControlPanel = nil
         }
-        .ignoresSafeArea()
-        .allowsHitTesting(false)
+    }
+
+    private func registerManualActivity() {
+        manualControlsActivityID = UUID()
+    }
+
+    private func requestRecenter() {
+        renderer?.hideControls()
+        hideManualControls()
+        recenterCountdown = recenterCountdownStart
+        recenterRequestID = UUID()
+    }
+
+    @ViewBuilder
+    private func playbackStatus(title: String) -> some View {
+        if storedPreferences.vrGlassesEnabled {
+            HStack(spacing: 0) {
+                statusEye(title: title)
+                statusEye(title: title)
+            }
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+        } else {
+            statusEye(title: title)
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+        }
     }
 
     private func statusEye(title: String) -> some View {

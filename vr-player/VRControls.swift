@@ -19,12 +19,18 @@ nonisolated struct VRHUDState: Equatable, Sendable {
     var bufferedFraction: Double
     var projection: VRProjection
     var stereoLayout: StereoLayout
+    var presentationMode: VRPresentationMode
+    var threeDMode: VRThreeDMode
     var brightness: Double
     var volume: Double
     var playlistEntries: [VRPlaylistEntry]
     var playlistPage: Int
     var playlistPageCount: Int
     var recenterCountdown: Int? = nil
+
+    var effectiveStereoLayout: StereoLayout {
+        presentationMode == .panorama ? stereoLayout : .mono
+    }
 }
 
 nonisolated enum VRControlTarget: Hashable, Sendable {
@@ -38,6 +44,8 @@ nonisolated enum VRControlTarget: Hashable, Sendable {
     case seek
     case projection180
     case projection360
+    case threeDFit
+    case threeDFill
     case mono
     case sideBySide
     case brightness
@@ -82,10 +90,12 @@ nonisolated enum VRHUDLayout {
     static let next = VRNormalizedRect(minX: 0.50, minY: 0.11, maxX: 0.66, maxY: 0.31)
     static let playlist = VRNormalizedRect(minX: 0.72, minY: 0.11, maxX: 0.88, maxY: 0.31)
     static let progress = VRNormalizedRect(minX: 0.10, minY: 0.36, maxX: 0.90, maxY: 0.49)
-    static let projection180 = VRNormalizedRect(minX: 0.17, minY: 0.54, maxX: 0.32, maxY: 0.68)
-    static let projection360 = VRNormalizedRect(minX: 0.33, minY: 0.54, maxX: 0.48, maxY: 0.68)
-    static let mono = VRNormalizedRect(minX: 0.52, minY: 0.54, maxX: 0.67, maxY: 0.68)
-    static let sideBySide = VRNormalizedRect(minX: 0.68, minY: 0.54, maxX: 0.83, maxY: 0.68)
+    static let projection180 = VRNormalizedRect(minX: 0.05, minY: 0.54, maxX: 0.19, maxY: 0.68)
+    static let projection360 = VRNormalizedRect(minX: 0.20, minY: 0.54, maxX: 0.34, maxY: 0.68)
+    static let threeDFit = VRNormalizedRect(minX: 0.35, minY: 0.54, maxX: 0.49, maxY: 0.68)
+    static let threeDFill = VRNormalizedRect(minX: 0.50, minY: 0.54, maxX: 0.65, maxY: 0.68)
+    static let mono = VRNormalizedRect(minX: 0.66, minY: 0.54, maxX: 0.80, maxY: 0.68)
+    static let sideBySide = VRNormalizedRect(minX: 0.81, minY: 0.54, maxX: 0.95, maxY: 0.68)
     static let brightness = VRNormalizedRect(minX: 0.10, minY: 0.76, maxX: 0.44, maxY: 0.90)
     static let volume = VRNormalizedRect(minX: 0.56, minY: 0.76, maxX: 0.90, maxY: 0.90)
     static let playlistBack = VRNormalizedRect(minX: 0.035, minY: 0.035, maxX: 0.13, maxY: 0.18)
@@ -108,8 +118,12 @@ nonisolated enum VRHUDLayout {
             }
             if projection180.contains(point) { return VRControlHit(target: .projection180, value: nil) }
             if projection360.contains(point) { return VRControlHit(target: .projection360, value: nil) }
+            if threeDFit.contains(point) { return VRControlHit(target: .threeDFit, value: nil) }
+            if threeDFill.contains(point) { return VRControlHit(target: .threeDFill, value: nil) }
             if mono.contains(point) { return VRControlHit(target: .mono, value: nil) }
-            if sideBySide.contains(point) { return VRControlHit(target: .sideBySide, value: nil) }
+            if state.presentationMode != .threeD, sideBySide.contains(point) {
+                return VRControlHit(target: .sideBySide, value: nil)
+            }
             if brightness.contains(point) {
                 return VRControlHit(target: .brightness, value: brightness.horizontalFraction(for: point))
             }

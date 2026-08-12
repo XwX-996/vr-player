@@ -20,6 +20,8 @@ nonisolated enum VRUVMapping {
             return surfaceCoordinate
         case .sideBySide:
             return SIMD2(surfaceCoordinate.x * 0.5 + Float(eye) * 0.5, surfaceCoordinate.y)
+        case .topBottom:
+            return SIMD2(surfaceCoordinate.x, surfaceCoordinate.y * 0.5 + Float(eye) * 0.5)
         }
     }
 }

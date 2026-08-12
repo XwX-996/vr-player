@@ -70,10 +70,43 @@ enum VRHUDTextureFactory {
             context: context
         )
 
-        drawSegment(title: "180\u{00b0}", rect: VRHUDLayout.projection180, selected: state.projection == .hemisphere180, context: context)
-        drawSegment(title: "360\u{00b0}", rect: VRHUDLayout.projection360, selected: state.projection == .sphere360, context: context)
-        drawSegment(title: "Mono", rect: VRHUDLayout.mono, selected: state.stereoLayout == .mono, context: context)
-        drawSegment(title: "SBS", rect: VRHUDLayout.sideBySide, selected: state.stereoLayout == .sideBySide, context: context)
+        drawSegment(
+            title: "180\u{00b0}",
+            rect: VRHUDLayout.projection180,
+            selected: state.presentationMode == .panorama && state.projection == .hemisphere180,
+            context: context
+        )
+        drawSegment(
+            title: "360\u{00b0}",
+            rect: VRHUDLayout.projection360,
+            selected: state.presentationMode == .panorama && state.projection == .sphere360,
+            context: context
+        )
+        drawSegment(
+            title: "3D",
+            rect: VRHUDLayout.threeDFit,
+            selected: state.presentationMode == .threeD && state.threeDMode == .fit,
+            context: context
+        )
+        drawSegment(
+            title: "3D Fill",
+            rect: VRHUDLayout.threeDFill,
+            selected: state.presentationMode == .threeD && state.threeDMode == .fill,
+            context: context
+        )
+        drawSegment(
+            title: "Mono",
+            rect: VRHUDLayout.mono,
+            selected: state.effectiveStereoLayout == .mono,
+            context: context
+        )
+        drawSegment(
+            title: "SBS",
+            rect: VRHUDLayout.sideBySide,
+            selected: state.presentationMode == .panorama && state.stereoLayout == .sideBySide,
+            enabled: state.presentationMode != .threeD,
+            context: context
+        )
 
         drawSlider(
             rect: pixelRect(VRHUDLayout.brightness).insetBy(dx: 16, dy: 34),
@@ -155,9 +188,21 @@ enum VRHUDTextureFactory {
         )
     }
 
-    private static func drawSegment(title: String, rect normalizedRect: VRNormalizedRect, selected: Bool, context: CGContext) {
+    private static func drawSegment(
+        title: String,
+        rect normalizedRect: VRNormalizedRect,
+        selected: Bool,
+        enabled: Bool = true,
+        context: CGContext
+    ) {
         let rect = pixelRect(normalizedRect).insetBy(dx: 5, dy: 6)
-        context.setFillColor((selected ? UIColor.white.withAlphaComponent(0.25) : UIColor.white.withAlphaComponent(0.07)).cgColor)
+        let fillColor: UIColor
+        if selected {
+            fillColor = UIColor.white.withAlphaComponent(0.25)
+        } else {
+            fillColor = UIColor.white.withAlphaComponent(enabled ? 0.07 : 0.035)
+        }
+        context.setFillColor(fillColor.cgColor)
         context.addPath(UIBezierPath(roundedRect: rect, cornerRadius: 8).cgPath)
         context.fillPath()
         if selected {
@@ -166,7 +211,13 @@ enum VRHUDTextureFactory {
             context.addPath(UIBezierPath(roundedRect: rect.insetBy(dx: 1, dy: 1), cornerRadius: 8).cgPath)
             context.strokePath()
         }
-        drawText(title, rect: rect, font: .systemFont(ofSize: 26, weight: .semibold), color: .white, alignment: .center)
+        drawText(
+            title,
+            rect: rect,
+            font: .systemFont(ofSize: title.count > 5 ? 23 : 26, weight: .semibold),
+            color: UIColor.white.withAlphaComponent(enabled ? 1 : 0.38),
+            alignment: .center
+        )
     }
 
     private static func drawSlider(

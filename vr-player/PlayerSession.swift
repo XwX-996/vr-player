@@ -11,6 +11,8 @@ final class PlayerSession {
     private(set) var duration: Double = 0
     private(set) var currentItem: PlaylistItem
     private(set) var frameProvider: VideoFrameProvider
+    private(set) var repeatsCurrentItem: Bool
+    private(set) var playbackRate: Double
     var bufferedFraction: Double = 0
 
     @ObservationIgnored private var resource: PlayableAssetResource
@@ -25,8 +27,14 @@ final class PlayerSession {
     @ObservationIgnored private var hasRestoredPosition = false
     @ObservationIgnored private var playbackRequested = true
 
-    init(item: PlaylistItem) throws {
+    init(
+        item: PlaylistItem,
+        repeatsCurrentItem: Bool = false,
+        playbackRate: Double = 1
+    ) throws {
         currentItem = item
+        self.repeatsCurrentItem = repeatsCurrentItem
+        self.playbackRate = playbackRate
         resource = try PlayableAssetResource(item: item)
         playerItem = AVPlayerItem(asset: resource.asset)
         videoOutput = VideoOutputFactory.makeVideoOutput()
@@ -63,7 +71,7 @@ final class PlayerSession {
     func play() {
         playbackRequested = true
         guard phase == .ended else {
-            player.play()
+            resumePlayback()
             return
         }
 
@@ -77,7 +85,7 @@ final class PlayerSession {
         ) { [weak self] finished in
             Task { @MainActor [weak self] in
                 guard let self, finished, self.playbackRequested else { return }
-                self.player.play()
+                self.resumePlayback()
             }
         }
     }
@@ -99,15 +107,32 @@ final class PlayerSession {
     func seek(to seconds: Double) {
         guard duration > 0 else { return }
         let target = min(max(seconds, 0), duration)
+        position = target
+        currentItem.lastPosition = target
+        currentItem.lastPlayedAt = .now
+        let tolerance = CMTime(seconds: 0.1, preferredTimescale: 600)
         player.seek(
             to: CMTime(seconds: target, preferredTimescale: 600),
-            toleranceBefore: .zero,
-            toleranceAfter: .zero
+            toleranceBefore: tolerance,
+            toleranceAfter: tolerance
         )
     }
 
     func skip(by seconds: Double) {
         seek(to: position + seconds)
+    }
+
+    func setRepeatsCurrentItem(_ repeats: Bool) {
+        repeatsCurrentItem = repeats
+    }
+
+    func setPlaybackRate(_ rate: Double) {
+        playbackRate = [0.5, 0.75, 1, 1.25, 1.5, 2].min(by: {
+            abs($0 - rate) < abs($1 - rate)
+        }) ?? 1
+        if playbackRequested, playerItem.status == .readyToPlay {
+            resumePlayback()
+        }
     }
 
     private func configureObservers() {
@@ -123,7 +148,7 @@ final class PlayerSession {
                     }
                     restorePositionIfNeeded()
                     if playbackRequested {
-                        player.play()
+                        resumePlayback()
                     }
                 case .failed:
                     playbackRequested = false
@@ -184,11 +209,32 @@ final class PlayerSession {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                self.playbackRequested = false
-                self.phase = PlaybackStateReducer.reduce(self.phase, event: .finish)
-                self.currentItem.lastPosition = 0
+                switch PlaybackControl.endAction(repeatsCurrentItem: self.repeatsCurrentItem) {
+                case .finish:
+                    self.playbackRequested = false
+                    self.phase = PlaybackStateReducer.reduce(self.phase, event: .finish)
+                    self.currentItem.lastPosition = 0
+                case .repeatCurrent:
+                    self.position = 0
+                    self.currentItem.lastPosition = 0
+                    self.phase = PlaybackStateReducer.reduce(self.phase, event: .prepare)
+                    self.player.seek(
+                        to: .zero,
+                        toleranceBefore: .zero,
+                        toleranceAfter: .zero
+                    ) { [weak self] finished in
+                        Task { @MainActor [weak self] in
+                            guard let self, finished, self.playbackRequested else { return }
+                            self.resumePlayback()
+                        }
+                    }
+                }
             }
         }
+    }
+
+    private func resumePlayback() {
+        player.playImmediately(atRate: Float(playbackRate))
     }
 
     private func restorePositionIfNeeded() {

@@ -13,7 +13,7 @@ struct VRHUDPreviewScreen: View {
     var body: some View {
         VRMetalSurface(
             frameProvider: frameProvider,
-            settings: VRRenderSettings(projection: .sphere360, stereoLayout: .mono),
+            settings: VRRenderSettings(preferences: previewPreferences),
             hudState: VRHUDState(
                 mode: .main,
                 isPlaying: true,
@@ -22,6 +22,8 @@ struct VRHUDPreviewScreen: View {
                 bufferedFraction: 0.62,
                 projection: .sphere360,
                 stereoLayout: .mono,
+                presentationMode: previewPreferences.presentationMode,
+                threeDMode: previewPreferences.threeDMode,
                 brightness: 0.58,
                 volume: 0.72,
                 playlistEntries: [],
@@ -42,6 +44,19 @@ struct VRHUDPreviewScreen: View {
         .task {
             OrientationManager.lockLandscape()
         }
+    }
+
+    private var previewPreferences: VRPlayerPreferences {
+        var preferences = VRPlayerPreferences.default
+        let arguments = ProcessInfo.processInfo.arguments
+        if arguments.contains("--hud-3d-fill-preview") {
+            preferences.presentationMode = .threeD
+            preferences.threeDMode = .fill
+        } else if arguments.contains("--hud-3d-preview") {
+            preferences.presentationMode = .threeD
+            preferences.threeDMode = .fit
+        }
+        return preferences
     }
 }
 #endif

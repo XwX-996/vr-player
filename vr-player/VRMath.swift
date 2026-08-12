@@ -75,4 +75,26 @@ extension simd_float4x4 {
             SIMD4<Float>(x, y, z, 1)
         )
     }
+
+    static func rotationX(_ angle: Float) -> simd_float4x4 {
+        let cosine = cos(angle)
+        let sine = sin(angle)
+        return simd_float4x4(
+            SIMD4<Float>(1, 0, 0, 0),
+            SIMD4<Float>(0, cosine, sine, 0),
+            SIMD4<Float>(0, -sine, cosine, 0),
+            SIMD4<Float>(0, 0, 0, 1)
+        )
+    }
+
+    static func rotationY(_ angle: Float) -> simd_float4x4 {
+        let cosine = cos(angle)
+        let sine = sin(angle)
+        return simd_float4x4(
+            SIMD4<Float>(cosine, 0, -sine, 0),
+            SIMD4<Float>(0, 1, 0, 0),
+            SIMD4<Float>(sine, 0, cosine, 0),
+            SIMD4<Float>(0, 0, 0, 1)
+        )
+    }
 }
