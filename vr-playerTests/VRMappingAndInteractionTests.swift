@@ -520,19 +520,43 @@ final class VRMappingAndInteractionTests: XCTestCase {
         }
     }
 
-    func testDwellActivatesOnlyAfterTwoSecondsAndLatches() {
-        var tracker = GazeDwellTracker(dwellDuration: 2)
+    func testDefaultDwellActivatesAfterOneSecondAndLatches() {
+        var tracker = GazeDwellTracker()
         let hit = VRControlHit(target: .playPause, value: nil)
 
         XCTAssertNil(tracker.update(hit: hit, at: 10))
-        XCTAssertNil(tracker.update(hit: hit, at: 11.99))
-        XCTAssertEqual(tracker.progress, 0.995, accuracy: 0.001)
-        XCTAssertEqual(tracker.update(hit: hit, at: 12)?.target, .playPause)
-        XCTAssertNil(tracker.update(hit: hit, at: 13))
+        XCTAssertNil(tracker.update(hit: hit, at: 10.99))
+        XCTAssertEqual(tracker.progress, 0.99, accuracy: 0.001)
+        XCTAssertEqual(tracker.update(hit: hit, at: 11)?.target, .playPause)
+        XCTAssertNil(tracker.update(hit: hit, at: 12))
+    }
 
+    func testLeavingDwellTargetResetsProgressAndRequiresFreshSecond() {
+        var tracker = GazeDwellTracker()
+        let hit = VRControlHit(target: .playPause, value: nil)
+
+        XCTAssertNil(tracker.update(hit: hit, at: 13))
+        XCTAssertNil(tracker.update(hit: hit, at: 13.75))
         XCTAssertNil(tracker.update(hit: nil, at: 14))
+        XCTAssertNil(tracker.target)
+        XCTAssertEqual(tracker.progress, 0)
         XCTAssertNil(tracker.update(hit: hit, at: 15))
-        XCTAssertEqual(tracker.update(hit: hit, at: 17)?.target, .playPause)
+        XCTAssertNil(tracker.update(hit: hit, at: 15.99))
+        XCTAssertEqual(tracker.update(hit: hit, at: 16)?.target, .playPause)
+    }
+
+    func testSwitchingDwellTargetsRestartsProgress() {
+        var tracker = GazeDwellTracker()
+        let playPause = VRControlHit(target: .playPause, value: nil)
+        let next = VRControlHit(target: .next, value: nil)
+
+        XCTAssertNil(tracker.update(hit: playPause, at: 20))
+        XCTAssertNil(tracker.update(hit: playPause, at: 20.75))
+        XCTAssertNil(tracker.update(hit: next, at: 20.76))
+        XCTAssertEqual(tracker.target, .next)
+        XCTAssertEqual(tracker.progress, 0)
+        XCTAssertNil(tracker.update(hit: next, at: 21.75))
+        XCTAssertEqual(tracker.update(hit: next, at: 21.76)?.target, .next)
     }
 
     func testProgressAndModeHitTargets() {

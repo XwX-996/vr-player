@@ -161,7 +161,7 @@ nonisolated struct GazeDwellTracker: Sendable {
     private var isLatched = false
     let dwellDuration: TimeInterval
 
-    init(dwellDuration: TimeInterval = 2) {
+    init(dwellDuration: TimeInterval = 1) {
         self.dwellDuration = dwellDuration
     }
 

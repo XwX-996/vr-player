@@ -51,13 +51,13 @@ enum VRHUDTextureFactory {
     }
 
     private static func drawMain(state: VRHUDState, in context: CGContext) {
-        drawIcon("chevron.left", in: VRHUDLayout.back, context: context, label: "Back")
-        drawIcon("scope", in: VRHUDLayout.recenter, context: context, label: "Center")
-        drawIcon("xmark", in: VRHUDLayout.hideControls, context: context, label: "Close")
-        drawIcon("backward.end.fill", in: VRHUDLayout.previous, context: context, label: "Previous")
-        drawIcon(state.isPlaying ? "pause.fill" : "play.fill", in: VRHUDLayout.playPause, context: context, label: state.isPlaying ? "Pause" : "Play")
-        drawIcon("forward.end.fill", in: VRHUDLayout.next, context: context, label: "Next")
-        drawIcon("list.bullet", in: VRHUDLayout.playlist, context: context, label: "Playlist")
+        drawIcon("chevron.left", in: VRHUDLayout.back, context: context, label: "返回")
+        drawIcon("scope", in: VRHUDLayout.recenter, context: context, label: "居中")
+        drawIcon("xmark", in: VRHUDLayout.hideControls, context: context, label: "关闭")
+        drawIcon("backward.end.fill", in: VRHUDLayout.previous, context: context, label: "上一个")
+        drawIcon(state.isPlaying ? "pause.fill" : "play.fill", in: VRHUDLayout.playPause, context: context, label: state.isPlaying ? "暂停" : "播放")
+        drawIcon("forward.end.fill", in: VRHUDLayout.next, context: context, label: "下一个")
+        drawIcon("list.bullet", in: VRHUDLayout.playlist, context: context, label: "播放列表")
 
         let progressRect = pixelRect(VRHUDLayout.progress).insetBy(dx: 18, dy: 32)
         drawSlider(
@@ -89,13 +89,13 @@ enum VRHUDTextureFactory {
             context: context
         )
         drawSegment(
-            title: "3D Fill",
+            title: "3D 充满",
             rect: VRHUDLayout.threeDFill,
             selected: state.presentationMode == .threeD && state.threeDMode == .fill,
             context: context
         )
         drawSegment(
-            title: "Mono",
+            title: "单幅",
             rect: VRHUDLayout.mono,
             selected: state.effectiveStereoLayout == .mono,
             context: context
@@ -129,10 +129,10 @@ enum VRHUDTextureFactory {
     }
 
     private static func drawPlaylist(state: VRHUDState, in context: CGContext) {
-        drawIcon("chevron.left", in: VRHUDLayout.playlistBack, context: context, label: "Back")
-        drawIcon("xmark", in: VRHUDLayout.hideControls, context: context, label: "Close")
+        drawIcon("chevron.left", in: VRHUDLayout.playlistBack, context: context, label: "返回")
+        drawIcon("xmark", in: VRHUDLayout.hideControls, context: context, label: "关闭")
         drawText(
-            "Playlist",
+            "播放列表",
             rect: CGRect(x: 200, y: 42, width: 800, height: 64),
             font: .systemFont(ofSize: 34, weight: .semibold),
             color: .white,
@@ -157,10 +157,10 @@ enum VRHUDTextureFactory {
         }
 
         if state.playlistPage > 0 {
-            drawIcon("chevron.left", in: VRHUDLayout.playlistPreviousPage, context: context, label: "Previous page")
+            drawIcon("chevron.left", in: VRHUDLayout.playlistPreviousPage, context: context, label: "上一页")
         }
         if state.playlistPage + 1 < state.playlistPageCount {
-            drawIcon("chevron.right", in: VRHUDLayout.playlistNextPage, context: context, label: "Next page")
+            drawIcon("chevron.right", in: VRHUDLayout.playlistNextPage, context: context, label: "下一页")
         }
         drawText(
             "\(state.playlistPage + 1) / \(max(state.playlistPageCount, 1))",

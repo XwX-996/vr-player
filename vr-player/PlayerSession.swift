@@ -1,5 +1,3 @@
-@preconcurrency import AVFoundation
-import CoreVideo
 import Foundation
 import Observation
 
@@ -10,22 +8,18 @@ final class PlayerSession {
     private(set) var position: Double = 0
     private(set) var duration: Double = 0
     private(set) var currentItem: PlaylistItem
-    private(set) var frameProvider: VideoFrameProvider
+    private(set) var frameProvider: any VideoFrameProviding
     private(set) var repeatsCurrentItem: Bool
     private(set) var playbackRate: Double
+    private(set) var isUsingHEVCFallback = false
     var bufferedFraction: Double = 0
 
-    @ObservationIgnored private var resource: PlayableAssetResource
-    @ObservationIgnored private var playerItem: AVPlayerItem
-    @ObservationIgnored private let videoOutput: AVPlayerItemVideoOutput
-    @ObservationIgnored private let player: AVPlayer
-    @ObservationIgnored private var statusObservation: NSKeyValueObservation?
-    @ObservationIgnored private var timeControlObservation: NSKeyValueObservation?
-    @ObservationIgnored private var loadedRangesObservation: NSKeyValueObservation?
-    @ObservationIgnored private var timeObserver: Any?
-    @ObservationIgnored private var endObserver: NSObjectProtocol?
+    @ObservationIgnored private var engine: any PlaybackEngine
     @ObservationIgnored private var hasRestoredPosition = false
     @ObservationIgnored private var playbackRequested = true
+    @ObservationIgnored private var fallbackAttempted = false
+    @ObservationIgnored private var fallbackTask: Task<Void, Never>?
+    @ObservationIgnored private var isShutdown = false
 
     init(
         item: PlaylistItem,
@@ -35,64 +29,38 @@ final class PlayerSession {
         currentItem = item
         self.repeatsCurrentItem = repeatsCurrentItem
         self.playbackRate = playbackRate
-        resource = try PlayableAssetResource(item: item)
-        playerItem = AVPlayerItem(asset: resource.asset)
-        videoOutput = VideoOutputFactory.makeVideoOutput()
-        playerItem.add(videoOutput)
-        frameProvider = VideoFrameProvider(output: videoOutput)
-        player = AVPlayer(playerItem: playerItem)
-        player.automaticallyWaitsToMinimizeStalling = true
-        playerItem.preferredForwardBufferDuration = 20
-        configureObservers()
+        let engine = try AVPlayerPlaybackEngine(item: item)
+        self.engine = engine
+        frameProvider = engine.frameProvider
+        configure(engine)
+        engine.play(rate: playbackRate)
     }
 
     func shutdown() {
-        player.pause()
-        persistState()
-        if let timeObserver {
-            player.removeTimeObserver(timeObserver)
-            self.timeObserver = nil
-        }
-        if let endObserver {
-            NotificationCenter.default.removeObserver(endObserver)
-            self.endObserver = nil
-        }
-        statusObservation = nil
-        timeControlObservation = nil
-        loadedRangesObservation = nil
+        guard !isShutdown else { return }
+        isShutdown = true
+        fallbackTask?.cancel()
+        fallbackTask = nil
+        engine.shutdown()
     }
 
     var isPlaying: Bool { playbackRequested }
 
-    func persistState() {
-        resource.persistCacheIndex(to: currentItem)
-    }
-
     func play() {
         playbackRequested = true
-        guard phase == .ended else {
-            resumePlayback()
-            return
+        if phase == .ended {
+            position = 0
+            currentItem.lastPosition = 0
+            phase = PlaybackStateReducer.reduce(phase, event: .prepare)
+            engine.seek(to: 0)
         }
-
-        position = 0
-        currentItem.lastPosition = 0
-        phase = PlaybackStateReducer.reduce(phase, event: .prepare)
-        player.seek(
-            to: .zero,
-            toleranceBefore: .zero,
-            toleranceAfter: .zero
-        ) { [weak self] finished in
-            Task { @MainActor [weak self] in
-                guard let self, finished, self.playbackRequested else { return }
-                self.resumePlayback()
-            }
-        }
+        engine.play(rate: playbackRate)
     }
 
     func pause() {
         playbackRequested = false
-        player.pause()
+        engine.pause()
+        phase = PlaybackStateReducer.reduce(phase, event: .pause)
     }
 
     func togglePlayback() {
@@ -110,12 +78,7 @@ final class PlayerSession {
         position = target
         currentItem.lastPosition = target
         currentItem.lastPlayedAt = .now
-        let tolerance = CMTime(seconds: 0.1, preferredTimescale: 600)
-        player.seek(
-            to: CMTime(seconds: target, preferredTimescale: 600),
-            toleranceBefore: tolerance,
-            toleranceAfter: tolerance
-        )
+        engine.seek(to: target)
     }
 
     func skip(by seconds: Double) {
@@ -130,111 +93,55 @@ final class PlayerSession {
         playbackRate = [0.5, 0.75, 1, 1.25, 1.5, 2].min(by: {
             abs($0 - rate) < abs($1 - rate)
         }) ?? 1
-        if playbackRequested, playerItem.status == .readyToPlay {
-            resumePlayback()
+        if playbackRequested {
+            engine.play(rate: playbackRate)
         }
     }
 
-    private func configureObservers() {
-        statusObservation = playerItem.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                switch item.status {
-                case .readyToPlay:
-                    let loadedDuration = item.duration.seconds
-                    if loadedDuration.isFinite {
-                        duration = loadedDuration
-                        currentItem.duration = loadedDuration
-                    }
-                    restorePositionIfNeeded()
-                    if playbackRequested {
-                        resumePlayback()
-                    }
-                case .failed:
-                    playbackRequested = false
-                    phase = PlaybackStateReducer.reduce(
-                        phase,
-                        event: .fail(item.error?.localizedDescription ?? "The video could not be opened.")
-                    )
-                default:
-                    phase = PlaybackStateReducer.reduce(phase, event: .prepare)
-                }
+    private func configure(_ engine: any PlaybackEngine) {
+        engine.onPhase = { [weak self, weak engine] newPhase in
+            guard let self, let engine, self.engine === engine, !isShutdown else { return }
+            phase = newPhase
+            if case .failed = newPhase {
+                playbackRequested = false
             }
         }
-
-        timeControlObservation = player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] player, _ in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                switch player.timeControlStatus {
-                case .playing:
-                    phase = PlaybackStateReducer.reduce(phase, event: .startPlaying)
-                case .waitingToPlayAtSpecifiedRate:
-                    phase = PlaybackStateReducer.reduce(phase, event: .waitForData)
-                case .paused:
-                    phase = PlaybackStateReducer.reduce(phase, event: .pause)
-                @unknown default:
-                    phase = PlaybackStateReducer.reduce(phase, event: .pause)
-                }
+        engine.onPosition = { [weak self, weak engine] newPosition, newDuration in
+            guard let self, let engine, self.engine === engine, !isShutdown else { return }
+            if newDuration > 0 {
+                duration = newDuration
+                currentItem.duration = newDuration
+            }
+            position = max(newPosition, 0)
+            currentItem.lastPosition = position
+            currentItem.lastPlayedAt = .now
+            restorePositionIfNeeded()
+        }
+        engine.onBufferedFraction = { [weak self, weak engine] fraction in
+            guard let self, let engine, self.engine === engine, !isShutdown else { return }
+            bufferedFraction = min(max(fraction, 0), 1)
+        }
+        engine.onEnded = { [weak self, weak engine] in
+            guard let self, let engine, self.engine === engine, !isShutdown else { return }
+            switch PlaybackControl.endAction(repeatsCurrentItem: repeatsCurrentItem) {
+            case .finish:
+                playbackRequested = false
+                phase = PlaybackStateReducer.reduce(phase, event: .finish)
+                currentItem.lastPosition = 0
+            case .repeatCurrent:
+                position = 0
+                currentItem.lastPosition = 0
+                phase = PlaybackStateReducer.reduce(phase, event: .prepare)
+                engine.seek(to: 0)
+                engine.play(rate: playbackRate)
             }
         }
-
-        loadedRangesObservation = playerItem.observe(\.loadedTimeRanges, options: [.new]) { [weak self] item, _ in
-            Task { @MainActor [weak self] in
-                guard let self,
-                      let range = item.loadedTimeRanges.first?.timeRangeValue,
-                      duration > 0
-                else { return }
-                bufferedFraction = min(max(range.end.seconds / duration, 0), 1)
+        if let avEngine = engine as? AVPlayerPlaybackEngine {
+            avEngine.onFallbackRequested = { [weak self, weak avEngine] reason in
+                guard let self, let avEngine, self.engine === avEngine else { return }
+                requestHEVCFallback(reason: reason)
             }
         }
-
-        timeObserver = player.addPeriodicTimeObserver(
-            forInterval: CMTime(seconds: 0.5, preferredTimescale: 600),
-            queue: .main
-        ) { [weak self] time in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                let seconds = time.seconds
-                guard seconds.isFinite else { return }
-                self.position = max(seconds, 0)
-                self.currentItem.lastPosition = self.position
-                self.currentItem.lastPlayedAt = .now
-            }
-        }
-
-        endObserver = NotificationCenter.default.addObserver(
-            forName: .AVPlayerItemDidPlayToEndTime,
-            object: playerItem,
-            queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                switch PlaybackControl.endAction(repeatsCurrentItem: self.repeatsCurrentItem) {
-                case .finish:
-                    self.playbackRequested = false
-                    self.phase = PlaybackStateReducer.reduce(self.phase, event: .finish)
-                    self.currentItem.lastPosition = 0
-                case .repeatCurrent:
-                    self.position = 0
-                    self.currentItem.lastPosition = 0
-                    self.phase = PlaybackStateReducer.reduce(self.phase, event: .prepare)
-                    self.player.seek(
-                        to: .zero,
-                        toleranceBefore: .zero,
-                        toleranceAfter: .zero
-                    ) { [weak self] finished in
-                        Task { @MainActor [weak self] in
-                            guard let self, finished, self.playbackRequested else { return }
-                            self.resumePlayback()
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private func resumePlayback() {
-        player.playImmediately(atRate: Float(playbackRate))
     }
 
     private func restorePositionIfNeeded() {
@@ -242,7 +149,55 @@ final class PlayerSession {
         hasRestoredPosition = true
         let saved = currentItem.lastPosition
         if saved > 2, duration == 0 || saved < duration - 5 {
-            player.seek(to: CMTime(seconds: saved, preferredTimescale: 600))
+            position = saved
+            engine.seek(to: saved)
+        }
+    }
+
+    private func requestHEVCFallback(reason: String) {
+        guard !fallbackAttempted, !isShutdown else { return }
+        fallbackAttempted = true
+        guard currentItem.videoCodec != .h264 else {
+            playbackRequested = false
+            phase = .failed(reason)
+            return
+        }
+
+        phase = .buffering
+        let fallbackStartPosition = position
+        let shouldResume = playbackRequested
+        fallbackTask = Task { [weak self] in
+            guard let self else { return }
+            do {
+                let fallback = try await HEVCVideoToolboxPlaybackEngine.make(item: currentItem)
+                try Task.checkCancellation()
+                guard !isShutdown else {
+                    fallback.shutdown()
+                    return
+                }
+                engine.shutdown()
+                engine = fallback
+                frameProvider = fallback.frameProvider
+                isUsingHEVCFallback = true
+                bufferedFraction = 0
+                configure(fallback)
+                fallback.seek(to: fallbackStartPosition)
+                if shouldResume {
+                    fallback.play(rate: playbackRate)
+                } else {
+                    fallback.pause()
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                playbackRequested = false
+                let probe = currentItem.storedHEVCProbeResult?.detail
+                phase = .failed(
+                    [reason, probe, "HEVC 备用播放失败：\(error.localizedDescription)"]
+                        .compactMap { $0 }
+                        .joined(separator: "\n")
+                )
+            }
         }
     }
 }

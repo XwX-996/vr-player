@@ -20,12 +20,12 @@ struct vr_playerApp: App {
             } else if ProcessInfo.processInfo.arguments.contains("--hud-preview") {
                 VRHUDPreviewScreen()
             } else {
-                ContentView()
+                AppRootView()
             }
 #else
-            ContentView()
+            AppRootView()
 #endif
         }
-        .modelContainer(for: PlaylistItem.self)
+        .modelContainer(for: [PlaylistItem.self, VideoFolder.self])
     }
 }

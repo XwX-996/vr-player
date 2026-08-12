@@ -31,7 +31,7 @@ assets that need a second focused crop.
 - Colors and visual tokens: both artifacts use a black field with high-contrast white controls. Buffered progress uses lower-opacity white and selected mode segments use a restrained gray fill and white border.
 - Image quality and asset fidelity: the source contains no product imagery. The implementation uses native SF Symbols rather than handcrafted SVG or text-glyph substitutes; the Metal output is sharp at native simulator density.
 - Copy and content: labels are concise command names. The added 180/360, Mono/SBS, Close, and Center labels match implemented behavior.
-- Icons and interaction states: previous, play/pause, next, playlist, close, recenter, brightness, volume, progress, and selected mode states are visible. Two-second dwell progression and hit mapping are covered by unit tests; the Debug preview itself intentionally uses a no-op action handler.
+- Icons and interaction states: previous, play/pause, next, playlist, close, recenter, brightness, volume, progress, and selected mode states are visible. One-second dwell progression and hit mapping are covered by unit tests; the Debug preview itself intentionally uses a no-op action handler.
 - Viewport resilience: the production player is landscape-only and supports both landscape orientations. The final iPhone 17 Pro capture has no overlap or clipped persistent control.
 - Accessibility: the gaze target geometry is larger than the rendered icon, dwell has visible progress, and all operations have text labels. Dynamic Type is not applicable inside the rasterized VR HUD; true optical readability remains a physical-headset check.
 
@@ -49,5 +49,22 @@ No actionable P0, P1, or P2 visual mismatches remain.
 
 - P3: repeat this comparison after installing the final self-built viewer profile, because lens parameters can shift peripheral optical placement on a physical phone.
 - P3: tune HUD angular size and gesture thresholds during the planned physical-headset interaction phase.
+
+## Manual Control Panel QA
+
+- Main controls: `qa/manual-controls-main-landscape.png`
+- Display settings: `qa/manual-controls-display-landscape.png`
+- Fish-eye distortion settings: `qa/manual-controls-fisheye-distortion-landscape.png`
+- Image style: `qa/manual-controls-style-landscape.png`
+- Panorama settings: `qa/manual-controls-panorama-landscape.png`
+- 3D settings: `qa/manual-controls-3d-landscape.png`
+- HUD 3D Fit selected: `qa/hud-3d-fit-landscape.png`
+- HUD 3D Fill selected: `qa/hud-3d-fill-landscape.png`
+- Captured size: 2622 x 1206 pixels, landscape
+- Reference scope: all annotated controls were retained except the crossed-out black-and-white style mode; the 3D action is now enabled and opens the focused 3D mode panel requested by the annotated reference.
+
+The main panel preserves the supplied control hierarchy, and each settings action opens a focused right-side panel without leaving the main control layer underneath it. The 3D panel uses the existing right-side surface, a native Toggle, and only the requested Normal and Fill rows. Fish-eye mode places Distortion Strength and Edge Correction at the top of the display panel with neutral zero-percent values and a reset action; the remaining eye geometry controls stay available in the panel's bounded scroll area. All captured states are nonblank, keep every label within its container, avoid the landscape camera cutout, and expose visible selected, disabled, slider, toggle, and playback states. Manual controls dismiss from the video background and after five seconds without activity; the original headset gaze HUD remains available independently.
+
+The HUD captures verify six separated mode targets: 180 degrees, 360 degrees, 3D, 3D Fill, Mono, and SBS. Both 3D states select Mono as the effective layout and visually disable SBS. Unit tests additionally verify the target rectangles do not overlap and that SBS cannot activate while 3D is selected.
 
 final result: passed

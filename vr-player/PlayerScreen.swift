@@ -65,7 +65,7 @@ struct PlayerScreen: View {
             } else if let setupError {
                 errorOverlay(message: setupError)
             } else {
-                playbackStatus(title: "Preparing")
+                playbackStatus(title: "正在准备")
             }
 
             SystemVolumeHostView(controller: volumeController)
@@ -158,7 +158,6 @@ struct PlayerScreen: View {
                 hideManualControls()
                 recenterRequestID = nil
                 renderer?.pauseTracking()
-                session?.persistState()
                 try? modelContext.save()
             }
         }
@@ -400,19 +399,19 @@ struct PlayerScreen: View {
         VStack(spacing: 14) {
             Image(systemName: "exclamationmark.triangle")
                 .font(.title2)
-            Text("Unable to play video")
+            Text("无法播放视频")
                 .font(.headline)
             Text(message)
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
             HStack(spacing: 12) {
-                Button("Retry", systemImage: "arrow.clockwise") {
+                Button("重试", systemImage: "arrow.clockwise") {
                     open(currentItem)
                 }
                 .buttonStyle(.bordered)
 
-                Button("Back") {
+                Button("返回") {
                     closePlayer()
                 }
                 .buttonStyle(.borderedProminent)

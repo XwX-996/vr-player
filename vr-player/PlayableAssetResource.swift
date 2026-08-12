@@ -7,7 +7,6 @@ final class PlayableAssetResource: @unchecked Sendable {
     private let securityScopedFile: SecurityScopedFile
     private let resourceLoader: RemoteAssetResourceLoader?
     private let resourceLoaderQueue: DispatchQueue?
-    private let cache: ByteRangeCache?
 
     init(item: PlaylistItem) throws {
         securityScopedFile = try SecurityScopedFile(bookmarkData: item.bookmarkData)
@@ -15,10 +14,7 @@ final class PlayableAssetResource: @unchecked Sendable {
         if item.sourceKind == .remote {
             let cache = try ByteRangeCache(
                 sourceURL: securityScopedFile.url,
-                cacheKey: item.id,
-                persistedIndexData: item.cacheIndexData,
-                persistedContentLength: item.cacheContentLength,
-                persistedModificationDate: item.cacheSourceModificationDate
+                cacheKey: item.id
             )
             let loader = RemoteAssetResourceLoader(
                 cache: cache,
@@ -36,20 +32,10 @@ final class PlayableAssetResource: @unchecked Sendable {
             asset.resourceLoader.setDelegate(loader, queue: queue)
             resourceLoader = loader
             resourceLoaderQueue = queue
-            self.cache = cache
         } else {
             asset = AVURLAsset(url: securityScopedFile.url)
             resourceLoader = nil
             resourceLoaderQueue = nil
-            cache = nil
         }
-    }
-
-    func persistCacheIndex(to item: PlaylistItem) {
-        guard let cache else { return }
-        item.cacheIndexData = cache.indexSnapshotData()
-        item.cacheContentLength = cache.contentLength
-        item.cacheSourceModificationDate = cache.sourceModificationDate
-        item.cacheUpdatedAt = .now
     }
 }

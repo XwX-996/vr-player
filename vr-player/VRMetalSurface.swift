@@ -2,7 +2,7 @@ import MetalKit
 import SwiftUI
 
 struct VRMetalSurface: UIViewRepresentable {
-    let frameProvider: VideoFrameProvider
+    let frameProvider: any VideoFrameProviding
     let settings: VRRenderSettings
     let hudState: VRHUDState
     let actionHandler: @Sendable (VRControlActivation) -> Void

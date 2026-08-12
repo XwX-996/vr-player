@@ -6,7 +6,7 @@ enum BookmarkAccessError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .staleBookmark:
-            "This file reference has expired. Add the video again from Files."
+            "此文件引用已失效，请从“文件”中重新添加视频。"
         }
     }
 }

@@ -151,6 +151,23 @@ private final class VideoTextureResources: @unchecked Sendable {
     }
 }
 
+private enum VideoRenderInputError: LocalizedError {
+    case unsupportedPixelFormat(OSType)
+    case invalidPlaneCount(Int)
+    case textureCreationFailed(lumaStatus: CVReturn, chromaStatus: CVReturn)
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedPixelFormat(let format):
+            "解码后的视频使用了不支持的像素格式（\(MediaImportValidator.fourCCString(format))），仅支持渲染 8 位 NV12 SDR 画面。"
+        case .invalidPlaneCount(let count):
+            "解码后的视频包含 \(count) 个图像平面，8 位 NV12 必须包含两个平面。"
+        case .textureCreationFailed(let lumaStatus, let chromaStatus):
+            "Metal 无法为解码画面创建纹理（亮度 \(lumaStatus)，色度 \(chromaStatus)），画面尺寸可能超出此设备的纹理限制。"
+        }
+    }
+}
+
 nonisolated enum VRHUDGeometry {
     static let referencePanelWidth: Float = 3
     static let panelHeight: Float = referencePanelWidth / 1.875
@@ -214,7 +231,7 @@ nonisolated enum VRHUDGeometry {
 }
 
 final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
-    var frameProvider: VideoFrameProvider? {
+    var frameProvider: (any VideoFrameProviding)? {
         get {
             stateLock.lock()
             defer { stateLock.unlock() }
@@ -244,7 +261,7 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     private let hudVertexCount: Int
     private let inFlightSemaphore = DispatchSemaphore(value: 2)
     private let stateLock = NSLock()
-    private var storedFrameProvider: VideoFrameProvider?
+    private var storedFrameProvider: (any VideoFrameProviding)?
     private var settings = VRRenderSettings(preferences: .default)
     private var hudState: VRHUDState?
     private var hudTexture: MTLTexture?
@@ -559,8 +576,17 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         eyePass.colorAttachments[0].clearColor = MTLClearColorMake(0, 0, 0, 1)
         guard let eyeEncoder = commandBuffer.makeRenderCommandEncoder(descriptor: eyePass) else { return }
 
-        let videoResources = lastVideoFrame.flatMap {
-            makeYUVTextures(pixelBuffer: $0.pixelBuffer)
+        let videoResources: VideoTextureResources?
+        if let lastVideoFrame {
+            switch makeYUVTextures(pixelBuffer: lastVideoFrame.pixelBuffer) {
+            case .success(let resources):
+                videoResources = resources
+            case .failure(let error):
+                videoResources = nil
+                currentFrameProvider?.reportRenderFailure(error.localizedDescription)
+            }
+        } else {
+            videoResources = nil
         }
         if let videoResources {
             drawVideo(
@@ -943,15 +969,23 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         return eyeTexture
     }
 
-    private func makeYUVTextures(pixelBuffer: CVPixelBuffer) -> VideoTextureResources? {
-        guard CVPixelBufferGetPlaneCount(pixelBuffer) == 2 else { return nil }
+    private func makeYUVTextures(
+        pixelBuffer: CVPixelBuffer
+    ) -> Result<VideoTextureResources, VideoRenderInputError> {
+        let pixelFormat = CVPixelBufferGetPixelFormatType(pixelBuffer)
+        guard pixelFormat == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange else {
+            return .failure(.unsupportedPixelFormat(pixelFormat))
+        }
+        guard CVPixelBufferGetPlaneCount(pixelBuffer) == 2 else {
+            return .failure(.invalidPlaneCount(CVPixelBufferGetPlaneCount(pixelBuffer)))
+        }
         let lumaWidth = CVPixelBufferGetWidthOfPlane(pixelBuffer, 0)
         let lumaHeight = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
         let chromaWidth = CVPixelBufferGetWidthOfPlane(pixelBuffer, 1)
         let chromaHeight = CVPixelBufferGetHeightOfPlane(pixelBuffer, 1)
         var lumaReference: CVMetalTexture?
         var chromaReference: CVMetalTexture?
-        guard CVMetalTextureCacheCreateTextureFromImage(
+        let lumaStatus = CVMetalTextureCacheCreateTextureFromImage(
             nil,
             textureCache,
             pixelBuffer,
@@ -961,8 +995,8 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
             lumaHeight,
             0,
             &lumaReference
-        ) == kCVReturnSuccess,
-        CVMetalTextureCacheCreateTextureFromImage(
+        )
+        let chromaStatus = CVMetalTextureCacheCreateTextureFromImage(
             nil,
             textureCache,
             pixelBuffer,
@@ -972,19 +1006,23 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
             chromaHeight,
             1,
             &chromaReference
-        ) == kCVReturnSuccess,
-        let lumaReference,
-        let chromaReference,
-        let luma = CVMetalTextureGetTexture(lumaReference),
-        let chroma = CVMetalTextureGetTexture(chromaReference)
-        else { return nil }
-        return VideoTextureResources(
+        )
+        guard lumaStatus == kCVReturnSuccess,
+              chromaStatus == kCVReturnSuccess,
+              let lumaReference,
+              let chromaReference,
+              let luma = CVMetalTextureGetTexture(lumaReference),
+              let chroma = CVMetalTextureGetTexture(chromaReference)
+        else {
+            return .failure(.textureCreationFailed(lumaStatus: lumaStatus, chromaStatus: chromaStatus))
+        }
+        return .success(VideoTextureResources(
             pixelBuffer: pixelBuffer,
             lumaReference: lumaReference,
             chromaReference: chromaReference,
             luma: luma,
             chroma: chroma
-        )
+        ))
     }
 
     @discardableResult

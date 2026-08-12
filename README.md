@@ -24,13 +24,20 @@ Open `vr-player.xcworkspace`, not `vr-player.xcodeproj`.
 
 ## Supported media
 
-The first release targets MP4/MOV containers with H.264 or H.265 video, AAC
-audio, SDR, and up to 4K 60 fps when the device can hardware-decode the source.
-It supports 180-degree and 360-degree projection plus Mono and side-by-side SBS
-texture layouts.
+The validated baseline is MP4/MOV with H.264 or H.265 video, AAC audio, SDR,
+and up to 4K 60 fps when the device can hardware-decode the source. HEVC files
+beyond that baseline, including 8K60 originals, are experimental: the app shows
+the inspected media parameters and hardware-probe result before the user chooses
+whether to add the original file. It does not transcode or reduce resolution,
+bitrate, or frame rate. The player supports 180-degree and 360-degree projection
+plus Mono and side-by-side SBS texture layouts.
 
 Selected files are validated before they are added to the playlist. Unsupported
 containers, codecs, audio formats, and HDR video are rejected during import.
+Valid `hvc1` and `hev1` HEVC files may be added after confirmation even when
+AVFoundation's playability preflight fails. Playback starts with AVPlayer and
+can fall back once to a hardware-required VideoToolbox path after a decode
+failure or first-frame timeout.
 
 MKV, VP9, AV1, HDR, and software decoding are intentionally out of scope.
 
@@ -41,11 +48,12 @@ The app does not implement SMB credentials or directory browsing. It persists a
 security-scoped bookmark for each selected file.
 
 Remote files are exposed to AVFoundation through byte-range requests backed by
-a sparse cache in the app's Caches directory. Cached ranges and source metadata
-are mirrored in SwiftData so later playback and seeks can reuse downloaded data.
-If iOS removes or truncates a cache file, its persisted range index is discarded
-and the data is read from the source again. Deleting a playlist item also deletes
-its cached bytes. The first release does not enforce a cache-size limit.
+1 MB cache blocks in the app's Caches directory. Each video can retain up to
+256 MB. The global limit defaults to 1 GB and can be adjusted from 512 MB to
+5 GB in 128 MB steps under Settings. When the limit is reached, the least
+recently used inactive video caches are removed first. Deleting a playlist item
+also deletes its cached bytes, and Settings can clear all cached data without
+removing playlist entries, playback progress, or source files.
 
 ## Viewer profile
 
@@ -82,11 +90,12 @@ xcodebuild -workspace vr-player.xcworkspace \
   CODE_SIGNING_ALLOWED=NO build
 ```
 
-Simulator tests cover range merging, cache-file recovery and deletion, supported
-container validation, UV mapping, gaze dwell/hit testing, playback state and
-control transitions, and bookmark round trips. Before relying on the player,
-validate these on a physical iPhone with representative local and SMB 4K60
-H.264/H.265 SDR samples:
+The current simulator suite contains 58 passing tests. It covers range merging,
+cache-file recovery and deletion, HEVC sample-entry and import policy checks,
+the bounded decoded-frame queue, UV mapping, gaze dwell/hit testing, playback
+state and control transitions, and bookmark round trips. Before relying on the
+player, regression-test representative local and SMB 4K60 H.264/H.265 SDR
+samples on a physical iPhone:
 
 - startup, ten-minute continuous playback, pause/resume, previous/next, and seek
 - disconnect, reconnect, and Retry behavior during SMB playback
@@ -94,6 +103,12 @@ H.264/H.265 SDR samples:
 - Cardboard pose tracking, recentering, distortion, and the up/down HUD gesture
 - brightness and system volume controls
 - sustained dropped-frame rate at or below 1 percent for local playback
+
+8K60 HEVC remains experimental until the original 8192x4096, approximately
+59 fps and 216 Mbps source completes physical iPhone testing for startup,
+audio sync, pause, seek, ten-minute playback, memory use, and dropped frames.
+Hardware rejection must be treated as a diagnosed device limit, not as proof of
+full 8K60 support.
 
 ## Debug HUD preview
 

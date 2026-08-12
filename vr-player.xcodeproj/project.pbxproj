@@ -13,6 +13,8 @@
 		5B4F6B64E45F79CE3393072A /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 71A4BA558FFEE9A88F40BAC2 /* Foundation.framework */; };
 		65A202B326DCF3606B557ED2 /* libPods-vr-player.a in Frameworks */ = {isa = PBXBuildFile; fileRef = EEA78C99E7918810DD8266C7 /* libPods-vr-player.a */; };
 		B86C5C44F8AC546F571B9E7F /* PlaybackStateReducerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DCB957C37997F2D2D3B4962 /* PlaybackStateReducerTests.swift */; };
+		C1A9B70131A0020000000001 /* LibrarySelectionLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1A9B70231A0020000000001 /* LibrarySelectionLogicTests.swift */; };
+		D2A3C40131A0010000000001 /* VideoLibraryServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2A3C40231A0010000000001 /* VideoLibraryServiceTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -33,6 +35,8 @@
 		7EFBBE6BCC1659F5F5005429 /* Pods-vr-player.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-vr-player.release.xcconfig"; path = "Target Support Files/Pods-vr-player/Pods-vr-player.release.xcconfig"; sourceTree = "<group>"; };
 		9038B16465DB6998993C5289 /* VRMappingAndInteractionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VRMappingAndInteractionTests.swift; sourceTree = "<group>"; };
 		CD449F797502458B02D71871 /* ByteRangeIndexTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ByteRangeIndexTests.swift; sourceTree = "<group>"; };
+		C1A9B70231A0020000000001 /* LibrarySelectionLogicTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = LibrarySelectionLogicTests.swift; sourceTree = "<group>"; };
+		D2A3C40231A0010000000001 /* VideoLibraryServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoLibraryServiceTests.swift; sourceTree = "<group>"; };
 		DC2C3E5D3029782B00AFF7EB /* vr-player.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "vr-player.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		EEA78C99E7918810DD8266C7 /* libPods-vr-player.a */ = {isa = PBXFileReference; explicitFileType = archive.ar; includeInIndex = 0; path = "libPods-vr-player.a"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F59F18B31D43DE8D16BF5EAC /* vr-playerTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "vr-playerTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -80,8 +84,10 @@
 			children = (
 				2AAA4AE213C1C3DC4BE2077E /* BookmarkAccessTests.swift */,
 				CD449F797502458B02D71871 /* ByteRangeIndexTests.swift */,
+				C1A9B70231A0020000000001 /* LibrarySelectionLogicTests.swift */,
 				4DCB957C37997F2D2D3B4962 /* PlaybackStateReducerTests.swift */,
 				9038B16465DB6998993C5289 /* VRMappingAndInteractionTests.swift */,
+				D2A3C40231A0010000000001 /* VideoLibraryServiceTests.swift */,
 			);
 			path = "vr-playerTests";
 			sourceTree = "<group>";
@@ -249,8 +255,10 @@
 			files = (
 				4BEB275C3A2714FDA32AC60F /* BookmarkAccessTests.swift in Sources */,
 				06B8957FCC24B498EFB16140 /* ByteRangeIndexTests.swift in Sources */,
+				C1A9B70131A0020000000001 /* LibrarySelectionLogicTests.swift in Sources */,
 				B86C5C44F8AC546F571B9E7F /* PlaybackStateReducerTests.swift in Sources */,
 				3B8756D030DE8EB2A0F17BE5 /* VRMappingAndInteractionTests.swift in Sources */,
+				D2A3C40131A0010000000001 /* VideoLibraryServiceTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -458,10 +466,10 @@
 					"$(SRCROOT)/vr-player/ThirdParty/Cardboard/sdk",
 					"$(SRCROOT)/vr-player/ThirdParty/Cardboard/proto",
 				);
+				INFOPLIST_KEY_NSMotionUsageDescription = "VR Player uses motion sensors to follow your head direction in headset mode.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_NSMotionUsageDescription = "VR Player uses motion sensors to follow your head direction in headset mode.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -503,10 +511,10 @@
 					"$(SRCROOT)/vr-player/ThirdParty/Cardboard/sdk",
 					"$(SRCROOT)/vr-player/ThirdParty/Cardboard/proto",
 				);
+				INFOPLIST_KEY_NSMotionUsageDescription = "VR Player uses motion sensors to follow your head direction in headset mode.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_NSMotionUsageDescription = "VR Player uses motion sensors to follow your head direction in headset mode.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
