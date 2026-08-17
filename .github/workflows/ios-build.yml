@@ -249,27 +249,45 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
-      - name: Auto-attach to GitHub Release (tag push)
+      - name: Create GitHub Release and attach artifacts (tag push)
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          name: ${{ env.PROJECT_NAME }} ${{ env.APP_SHORT_VERSION }} (${{ env.APP_BUNDLE_VERSION }}) - unsigned
-          body: |
-            **Unsigned build** - sign locally before installing on device.
-
-            | Item | Value |
-            |---|---|
-            | App | ${{ env.APP_BASENAME }} |
-            | Version | ${{ env.APP_SHORT_VERSION }} (${{ env.APP_BUNDLE_VERSION }}) |
-            | Bundle ID | ${{ env.APP_BUNDLE_ID }} |
-            | Commit | ${{ github.sha }} |
-            | Workflow Run | #${{ github.run_number }} |
-          files: |
-            ${{ steps.ipa.outputs.ipa_path }}
-            ${{ steps.archive.outputs.archive_path }}
-          fail_on_unmatched_files: true
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          ARCHIVE_PATH="${{ steps.archive.outputs.archive_path }}"
+          IPA_PATH="${{ steps.ipa.outputs.ipa_path }}"
+
+          # gh release upload 需要文件而非目录, 先把 xcarchive 压成 zip
+          ARCHIVE_ZIP="${OUTPUT_DIR}/${PROJECT_NAME}.xcarchive.zip"
+          (
+            cd "${OUTPUT_DIR}"
+            rm -f "${PROJECT_NAME}.xcarchive.zip"
+            zip -qry "${PROJECT_NAME}.xcarchive.zip" "${PROJECT_NAME}.xcarchive"
+          )
+
+          # 写 release notes 到临时文件
+          NOTES_FILE="$(mktemp /tmp/release-notes.XXXXXX.md)"
+          cat > "$NOTES_FILE" <<EOF
+          **Unsigned build** - sign locally before installing on device.
+
+          | Item | Value |
+          |---|---|
+          | App | ${APP_BASENAME} |
+          | Version | ${APP_SHORT_VERSION} (${APP_BUNDLE_VERSION}) |
+          | Bundle ID | ${APP_BUNDLE_ID} |
+          | Commit | ${GITHUB_SHA} |
+          | Workflow Run | #${GITHUB_RUN_NUMBER} |
+          EOF
+
+          echo "Creating release for tag $TAG"
+          gh release create "$TAG" \
+            --title "${PROJECT_NAME} ${APP_SHORT_VERSION} (${APP_BUNDLE_VERSION}) - unsigned" \
+            --notes-file "$NOTES_FILE" \
+            "$IPA_PATH" "$ARCHIVE_ZIP"
+
+          echo "Release created: $TAG"
 
       - name: Summary
         shell: bash
