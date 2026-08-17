@@ -4,3 +4,10 @@ DerivedData/
 .derived-data/
 build/
 *.xcresult
+
+# CI / GitHub Actions artifacts
+*.ipa
+*.xcarchive
+*.mobileprovision
+*.p12
+ExportOptions-generated.plist

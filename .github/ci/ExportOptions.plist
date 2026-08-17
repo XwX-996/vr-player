@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      导出方式说明:
+      - app-store:       App Store 发布
+      - ad-hoc:          Ad Hoc 内部分发 (需要注册设备 UDID)
+      - enterprise:      企业分发 (需要企业级开发者账号)
+      - development:     开发调试用
+    -->
+    <key>method</key>
+    <string>ad-hoc</string>
+
+    <!-- 开发团队 ID -->
+    <key>teamID</key>
+    <string>${DEVELOPMENT_TEAM}</string>
+
+    <!-- Bundle ID 与描述文件映射 -->
+    <key>provisioningProfiles</key>
+    <dict>
+        <key>${BUNDLE_ID}</key>
+        <string>${PROFILE_UUID}</string>
+    </dict>
+
+    <!-- 签名证书类型 -->
+    <key>signingCertificate</key>
+    <string>Apple Distribution</string>
+
+    <!-- 签名方式: manual 表示使用手动签名 -->
+    <key>signingStyle</key>
+    <string>manual</string>
+
+    <!-- 编译选项 -->
+    <key>stripSwiftSymbols</key>
+    <true/>
+
+    <key>uploadSymbols</key>
+    <true/>
+
+    <key>uploadBitcode</key>
+    <false/>
+
+    <!-- 重新编译时使用 Bitcode -->
+    <key>compileBitcode</key>
+    <false/>
+
+    <!-- 瘦身: 按设备架构切片 -->
+    <key>thinning</key>
+    <string>&lt;none&gt;</string>
+</dict>
+</plist>
