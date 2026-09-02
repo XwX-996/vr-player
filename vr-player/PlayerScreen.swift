@@ -309,31 +309,38 @@ struct PlayerScreen: View {
     }
 
     private var videoGesture: some Gesture {
-        DragGesture(minimumDistance: 0)
-            .onChanged { value in
-                guard !manualControlsVisible,
-                      storedPreferences.presentationMode == .panorama,
-                      !storedPreferences.vrGlassesEnabled,
-                      recenterCountdown == nil
-                else { return }
-                let delta = CGSize(
-                    width: value.translation.width - dragTranslation.width,
-                    height: value.translation.height - dragTranslation.height
-                )
-                dragTranslation = value.translation
-                renderer?.adjustManualLook(
-                    deltaX: Float(delta.width),
-                    deltaY: Float(delta.height)
-                )
+        TapGesture()
+            .onEnded {
+                guard canUseManualControls else { return }
+                showManualControls()
             }
-            .onEnded { value in
-                defer { dragTranslation = .zero }
-                guard !manualControlsVisible, recenterCountdown == nil else { return }
-                let distance = hypot(value.translation.width, value.translation.height)
-                if distance < 8 {
-                    showManualControls()
+            .exclusively(before: DragGesture(minimumDistance: 12)
+                .onChanged { value in
+                    guard canAdjustManualLook else { return }
+                    let delta = CGSize(
+                        width: value.translation.width - dragTranslation.width,
+                        height: value.translation.height - dragTranslation.height
+                    )
+                    dragTranslation = value.translation
+                    renderer?.adjustManualLook(
+                        deltaX: Float(delta.width),
+                        deltaY: Float(delta.height)
+                    )
                 }
-            }
+                .onEnded { _ in
+                    dragTranslation = .zero
+                }
+            )
+    }
+
+    private var canUseManualControls: Bool {
+        !manualControlsVisible
+            && !renderSettings.usesDualEyeViewports
+            && recenterCountdown == nil
+    }
+
+    private var canAdjustManualLook: Bool {
+        canUseManualControls && storedPreferences.presentationMode == .panorama
     }
 
     private func updatePreferences(_ update: (inout VRPlayerPreferences) -> Void) {

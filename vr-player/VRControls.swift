@@ -193,33 +193,73 @@ nonisolated struct GazeDwellTracker: Sendable {
 }
 
 nonisolated struct HeadGestureDetector: Sendable {
-    private var armedDirection = 0
-    private var transitions: [TimeInterval] = []
+    private var referencePitch: Float?
+    private var armedDirection: Int?
+    private var armedAt: TimeInterval?
+    private var requiresNeutral = false
     private var lastTriggeredAt: TimeInterval = -.infinity
 
+    let excursionRadians: Float
+    let neutralBandRadians: Float
+    let maximumGestureDuration: TimeInterval
+    let cooldown: TimeInterval
+
+    init(
+        excursionRadians: Float = .pi / 22.5,
+        neutralBandRadians: Float = .pi / 60,
+        maximumGestureDuration: TimeInterval = 1.5,
+        cooldown: TimeInterval = 2
+    ) {
+        self.excursionRadians = excursionRadians
+        self.neutralBandRadians = neutralBandRadians
+        self.maximumGestureDuration = maximumGestureDuration
+        self.cooldown = cooldown
+    }
+
     mutating func observe(pitch: Float, at time: TimeInterval) -> Bool {
-        let direction: Int
-        if pitch > 0.22 {
-            direction = 1
-        } else if pitch < -0.22 {
-            direction = -1
-        } else {
+        guard time - lastTriggeredAt >= cooldown else { return false }
+        guard let referencePitch else {
+            self.referencePitch = pitch
             return false
         }
 
+        if let armedAt, time - armedAt > maximumGestureDuration {
+            armedDirection = nil
+            self.armedAt = nil
+        }
+
+        let offset = pitch - referencePitch
+        if abs(offset) <= neutralBandRadians {
+            if requiresNeutral {
+                requiresNeutral = false
+            }
+            if armedDirection == nil {
+                self.referencePitch = pitch
+            }
+            return false
+        }
+
+        guard !requiresNeutral, abs(offset) >= excursionRadians else { return false }
+        let direction = offset > 0 ? 1 : -1
+        guard let armedDirection else {
+            self.armedDirection = direction
+            armedAt = time
+            return false
+        }
         guard direction != armedDirection else { return false }
-        armedDirection = direction
-        transitions.append(time)
-        transitions.removeAll(where: { time - $0 > 2.8 })
-        guard transitions.count >= 4, time - lastTriggeredAt > 2 else { return false }
-        transitions.removeAll(keepingCapacity: true)
+
+        self.armedDirection = nil
+        armedAt = nil
+        requiresNeutral = true
         lastTriggeredAt = time
         return true
     }
 
     mutating func reset() {
-        armedDirection = 0
-        transitions.removeAll(keepingCapacity: true)
+        referencePitch = nil
+        armedDirection = nil
+        armedAt = nil
+        requiresNeutral = false
         lastTriggeredAt = -.infinity
     }
 }

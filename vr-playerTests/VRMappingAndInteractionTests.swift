@@ -604,16 +604,65 @@ final class VRMappingAndInteractionTests: XCTestCase {
         XCTAssertEqual(VRHUDLayout.hitTest(state: state, point: SIMD2(0.90, 0.05))?.target, .hideControls)
     }
 
-    func testHeadGestureResetClearsAccumulatedTransitions() {
-        var detector = HeadGestureDetector()
+    func testHeadGestureTriggersForOppositeRelativeExcursions() {
+        var detector = HeadGestureDetector(
+            excursionRadians: 0.1,
+            neutralBandRadians: 0.02,
+            maximumGestureDuration: 1.5,
+            cooldown: 0
+        )
 
-        XCTAssertFalse(detector.observe(pitch: 0.3, at: 0))
-        XCTAssertFalse(detector.observe(pitch: -0.3, at: 0.5))
-        XCTAssertFalse(detector.observe(pitch: 0.3, at: 1))
+        XCTAssertFalse(detector.observe(pitch: 0.4, at: 0))
+        XCTAssertFalse(detector.observe(pitch: 0.48, at: 0.1))
+        XCTAssertFalse(detector.observe(pitch: 0.52, at: 0.2))
+        XCTAssertTrue(detector.observe(pitch: 0.28, at: 0.8))
+    }
 
+    func testHeadGestureRejectsSlowOrSameDirectionMovement() {
+        var detector = HeadGestureDetector(
+            excursionRadians: 0.1,
+            neutralBandRadians: 0.02,
+            maximumGestureDuration: 1,
+            cooldown: 0
+        )
+
+        XCTAssertFalse(detector.observe(pitch: 0, at: 0))
+        XCTAssertFalse(detector.observe(pitch: 0.12, at: 0.1))
+        XCTAssertFalse(detector.observe(pitch: 0.16, at: 0.2))
+        XCTAssertFalse(detector.observe(pitch: -0.12, at: 1.2))
+    }
+
+    func testHeadGestureRequiresReturningToNeutralBeforeRearming() {
+        var detector = HeadGestureDetector(
+            excursionRadians: 0.1,
+            neutralBandRadians: 0.02,
+            maximumGestureDuration: 1.5,
+            cooldown: 0
+        )
+
+        XCTAssertFalse(detector.observe(pitch: 0, at: 0))
+        XCTAssertFalse(detector.observe(pitch: 0.12, at: 0.1))
+        XCTAssertTrue(detector.observe(pitch: -0.12, at: 0.2))
+        XCTAssertFalse(detector.observe(pitch: 0.12, at: 0.3))
+        XCTAssertFalse(detector.observe(pitch: 0, at: 0.4))
+        XCTAssertFalse(detector.observe(pitch: 0.12, at: 0.5))
+        XCTAssertTrue(detector.observe(pitch: -0.12, at: 0.6))
+    }
+
+    func testHeadGestureResetCapturesANewReferencePitch() {
+        var detector = HeadGestureDetector(
+            excursionRadians: 0.1,
+            neutralBandRadians: 0.02,
+            maximumGestureDuration: 1.5,
+            cooldown: 0
+        )
+
+        XCTAssertFalse(detector.observe(pitch: 0.4, at: 0))
+        XCTAssertFalse(detector.observe(pitch: 0.52, at: 0.1))
         detector.reset()
-
-        XCTAssertFalse(detector.observe(pitch: -0.3, at: 1.5))
+        XCTAssertFalse(detector.observe(pitch: -0.3, at: 0.2))
+        XCTAssertFalse(detector.observe(pitch: -0.18, at: 0.3))
+        XCTAssertTrue(detector.observe(pitch: -0.42, at: 0.4))
     }
 
     private func sampleHUDState() -> VRHUDState {

@@ -275,6 +275,7 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
     private var panelModelMatrix = matrix_identity_float4x4
     private var dwellTracker = GazeDwellTracker()
     private var gestureDetector = HeadGestureDetector()
+    private var headGestureResetRequested = false
     private var manualYaw: Float = 0
     private var manualPitch: Float = 0
     private var latestTrackedHeadAngles: VRHeadAngles?
@@ -409,9 +410,18 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         let enteredThreeDFill = settings.presentationMode == .threeD
             && settings.threeDMode == .fill
             && (previousSettings.presentationMode != .threeD || previousSettings.threeDMode != .fill)
-        if enteredThreeDFill {
+        let changedHeadsetPresentation = previousSettings.usesDualEyeViewports
+            != settings.usesDualEyeViewports
+        if enteredThreeDFill || changedHeadsetPresentation {
             interactionLock.lock()
-            contentRecenterPending = true
+            if enteredThreeDFill {
+                contentRecenterPending = true
+            }
+            if changedHeadsetPresentation {
+                manualYaw = 0
+                manualPitch = 0
+                headGestureResetRequested = true
+            }
             interactionLock.unlock()
         }
 
@@ -446,6 +456,7 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         interactionLock.lock()
         manualYaw = 0
         manualPitch = 0
+        headGestureResetRequested = true
         if presentationMode == .threeD, threeDMode == .fill {
             if let latestTrackedHeadAngles {
                 contentReferenceAngles = latestTrackedHeadAngles
@@ -469,10 +480,12 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
 
     func pauseTracking() {
         cardboard.pauseHeadTracking()
+        requestHeadGestureReset()
     }
 
     func resumeTracking() {
         cardboard.resumeHeadTracking()
+        requestHeadGestureReset()
     }
 
     func mtkView(_ view: MTKView, drawableSizeWillChange size: CGSize) {
@@ -545,12 +558,13 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         let headView = manualLookMatrix() * trackedHeadView
 
         applyVisibilityRequest(headView: headView)
+        consumeHeadGestureResetRequest()
         if isRecenterCountdownVisible {
             controlsVisible = false
             dwellTracker.reset()
             gestureDetector.reset()
-        } else {
-            let pitch = Self.pitch(fromHeadView: headView)
+        } else if currentSettings.usesDualEyeViewports, !controlsVisible {
+            let pitch = Self.pitch(fromHeadView: trackedHeadView)
             if gestureDetector.observe(pitch: pitch, at: renderTime) {
                 showControls(at: headView)
             }
@@ -937,6 +951,22 @@ final class VRMetalRenderer: NSObject, MTKViewDelegate, @unchecked Sendable {
         } else {
             controlsVisible = false
             dwellTracker.reset()
+            gestureDetector.reset()
+        }
+    }
+
+    private func requestHeadGestureReset() {
+        interactionLock.lock()
+        headGestureResetRequested = true
+        interactionLock.unlock()
+    }
+
+    private func consumeHeadGestureResetRequest() {
+        interactionLock.lock()
+        let requested = headGestureResetRequested
+        headGestureResetRequested = false
+        interactionLock.unlock()
+        if requested {
             gestureDetector.reset()
         }
     }
